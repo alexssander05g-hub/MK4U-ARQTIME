@@ -1,0 +1,129 @@
+/* powerup.css — visual minimalista, alinhado aos tokens do Trello/Atlassian.
+   Objetivo: parecer NATIVO. Nada de dashboard gigante dentro do card. */
+
+:root {
+  --tt-text: #172b4d;
+  --tt-subtle: #5e6c84;
+  --tt-border: #dfe1e6;
+  --tt-bg: #ffffff;
+  --tt-bg-soft: #f4f5f7;
+  --tt-blue: #0079bf;
+  --tt-yellow: #d9a900;
+  --tt-green: #61bd4f;
+  --tt-red: #eb5a46;
+  --tt-radius: 4px;
+  --tt-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--tt-font);
+  color: var(--tt-text);
+  font-size: 14px;
+  background: transparent;
+}
+
+.tt-app { padding: 2px; }
+
+/* --- HERO (tempo + status) --- */
+.tt-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--tt-border);
+  border-left: 4px solid var(--tt-subtle);
+  border-radius: var(--tt-radius);
+  background: var(--tt-bg-soft);
+  margin-bottom: 10px;
+}
+.tt-hero.st-running { border-left-color: var(--tt-blue); }
+.tt-hero.st-paused  { border-left-color: var(--tt-yellow); }
+.tt-hero.st-done    { border-left-color: var(--tt-green); }
+.tt-hero.st-idle    { border-left-color: var(--tt-subtle); }
+
+.tt-big-time {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+.tt-status-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  color: #fff;
+  white-space: nowrap;
+}
+.tt-status-pill.st-running { background: var(--tt-blue); }
+.tt-status-pill.st-paused  { background: var(--tt-yellow); }
+.tt-status-pill.st-done    { background: var(--tt-green); }
+.tt-status-pill.st-idle    { background: var(--tt-subtle); }
+
+/* --- linhas rótulo/valor --- */
+.tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px;
+}
+.tt-label { color: var(--tt-subtle); }
+.tt-value { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* --- botões --- */
+.tt-actions { display: flex; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; }
+.tt-btn {
+  border: none;
+  border-radius: var(--tt-radius);
+  padding: 6px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  background: rgba(9, 30, 66, 0.08);
+  color: var(--tt-text);
+}
+.tt-btn:hover { background: rgba(9, 30, 66, 0.13); }
+.tt-btn.is-primary { background: var(--tt-blue); color: #fff; }
+.tt-btn.is-primary:hover { filter: brightness(0.95); }
+.tt-btn.is-danger { background: var(--tt-red); color: #fff; }
+.tt-btn.is-danger:hover { filter: brightness(0.95); }
+
+/* --- blocos (sessões / histórico) --- */
+.tt-block { margin-top: 12px; border-top: 1px solid var(--tt-border); padding-top: 8px; }
+.tt-block-title { font-weight: 600; font-size: 12px; color: var(--tt-subtle);
+  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+
+.tt-session, .tt-hist {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 2px; font-size: 13px;
+}
+.tt-session-idx { min-width: 92px; color: var(--tt-subtle); }
+.tt-session-range { flex: 1; color: var(--tt-text); font-variant-numeric: tabular-nums; }
+.tt-session-time { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tt-session.tt-total { border-top: 1px dashed var(--tt-border); margin-top: 4px; padding-top: 6px; }
+.tt-session.tt-total .tt-session-idx { color: var(--tt-text); font-weight: 600; }
+
+.tt-hist-when { min-width: 84px; color: var(--tt-subtle); font-variant-numeric: tabular-nums; }
+.tt-hist-what { flex: 1; }
+
+/* --- configurações --- */
+.tt-settings { display: flex; flex-direction: column; gap: 10px; padding: 4px; }
+.tt-field { display: flex; flex-direction: column; gap: 4px; }
+.tt-field > span { font-size: 12px; color: var(--tt-subtle); }
+.tt-field select, .tt-field input {
+  padding: 6px 8px; border: 1px solid var(--tt-border);
+  border-radius: var(--tt-radius); font-family: inherit; font-size: 14px; background: #fff;
+}
+.tt-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.tt-business { border: 1px dashed var(--tt-border); border-radius: var(--tt-radius);
+  padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.tt-business-hours { display: flex; gap: 12px; }
+.tt-field.tt-inline { flex-direction: row; align-items: center; gap: 6px; }
+.tt-days { display: flex; flex-wrap: wrap; gap: 10px; }
+.tt-days label { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+.tt-save { align-self: flex-start; margin-top: 4px; }

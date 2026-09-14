@@ -1,0 +1,11 @@
+{
+  "name": "trello-timetracker-powerup",
+  "version": "1.0.0",
+  "description": "Power-Up do Trello para controle de tempo dos cards (V1).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve -l 5000 .",
+    "dev": "python3 -m http.server 5000"
+  }
+}

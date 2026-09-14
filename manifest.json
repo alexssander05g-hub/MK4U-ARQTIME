@@ -1,0 +1,20 @@
+{
+  "name": "Controle de Tempo",
+  "details": "Cronometra automaticamente quanto tempo cada card leva, com início/conclusão, pausas, histórico e sessões — baseado em timestamps.",
+  "author": "Alexssander",
+  "icon": {
+    "url": "./public/icons/icon.svg"
+  },
+  "capabilities": [
+    "card-badges",
+    "card-detail-badges",
+    "card-back-section",
+    "card-buttons",
+    "show-settings"
+  ],
+  "connectors": {
+    "iframe": {
+      "url": "./index.html"
+    }
+  }
+}

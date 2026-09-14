@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configurações — Controle de Tempo</title>
+  <link rel="stylesheet" href="../src/styles/powerup.css" />
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+  <script type="module" src="../src/views/settingsView.js"></script>
+</head>
+<body>
+  <div id="app" class="tt-app tt-settings">
+    <label class="tt-field">
+      <span>Lista que INICIA o cronômetro</span>
+      <select id="startList"></select>
+    </label>
+
+    <label class="tt-field">
+      <span>Lista que FINALIZA o cronômetro</span>
+      <select id="doneList"></select>
+    </label>
+
+    <label class="tt-field">
+      <span>Lista "A fazer" (opcional — pausa ao voltar)</span>
+      <select id="todoList"></select>
+    </label>
+
+    <label class="tt-field">
+      <span>Formato de tempo</span>
+      <select id="timeFormat">
+        <option value="hm">02h 37min</option>
+        <option value="hms">02h 37min 15s</option>
+        <option value="clock">02:37:15</option>
+      </select>
+    </label>
+
+    <label class="tt-check"><input type="checkbox" id="countPauses" /> Descontar pausas do tempo efetivo</label>
+    <label class="tt-check"><input type="checkbox" id="showBadge" /> Mostrar badge na frente do card</label>
+    <label class="tt-check"><input type="checkbox" id="businessHoursOnly" /> Contar apenas horas úteis</label>
+
+    <div id="businessBox" class="tt-business">
+      <div class="tt-business-hours">
+        <label class="tt-field tt-inline"><span>Início</span><input type="time" id="bhStart" /></label>
+        <label class="tt-field tt-inline"><span>Fim</span><input type="time" id="bhEnd" /></label>
+      </div>
+      <div class="tt-days">
+        <label><input type="checkbox" id="day1" />Seg</label>
+        <label><input type="checkbox" id="day2" />Ter</label>
+        <label><input type="checkbox" id="day3" />Qua</label>
+        <label><input type="checkbox" id="day4" />Qui</label>
+        <label><input type="checkbox" id="day5" />Sex</label>
+        <label><input type="checkbox" id="day6" />Sáb</label>
+        <label><input type="checkbox" id="day0" />Dom</label>
+      </div>
+    </div>
+
+    <button id="saveBtn" class="tt-btn is-primary tt-save">Salvar</button>
+  </div>
+</body>
+</html>

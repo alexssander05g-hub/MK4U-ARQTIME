@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Controle de Tempo — Conector</title>
+  <!-- Biblioteca cliente oficial do Trello. Deve vir ANTES do nosso módulo,
+       pois define window.TrelloPowerUp de forma síncrona. -->
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+  <!-- Nosso conector, como módulo ES (sem build/bundler). -->
+  <script type="module" src="./src/client.js"></script>
+</head>
+<body>
+  <!-- Esta página é invisível: o Trello a carrega só para registrar as
+       capabilities. As telas visíveis são /views/section.html e settings.html. -->
+</body>
+</html>
