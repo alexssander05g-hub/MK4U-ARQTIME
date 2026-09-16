@@ -195,6 +195,22 @@ function sessionEffective(startedAt, endedAt, pausedMs, config) {
 }
 
 /**
+ * Tempo efetivo (ms) de UMA sessão — usado pelo relatório (semanal/mensal/por
+ * sessão). Aceita tanto sessão concluída (tem `endedAt`) quanto a sessão aberta
+ * (sem `endedAt`; usa `at` como fim e incorpora a pausa em aberto). Reaproveita
+ * exatamente a mesma regra de `sessionEffective`, então bate com computeTotals.
+ */
+export function sessionEffectiveMs(session, at, config) {
+  if (!session) return 0;
+  if (session.endedAt != null) {
+    return sessionEffective(session.startedAt, session.endedAt, session.pausedMs || 0, config);
+  }
+  const activePaused = (session.pausedMs || 0) +
+    (session.pauseStartedAt ? at - session.pauseStartedAt : 0);
+  return sessionEffective(session.startedAt, at, activePaused, config);
+}
+
+/**
  * Calcula todos os números exibidos, a partir dos timestamps.
  * @returns {{
  *   workedMs:number, pausedMs:number, effectiveMs:number,
