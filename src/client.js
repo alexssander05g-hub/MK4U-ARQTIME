@@ -11,6 +11,7 @@
  *   card-detail-badges  -> selo de status no topo do verso do card
  *   card-back-section   -> painel "Controle de Tempo" (iframe /views/section.html)
  *   card-buttons        -> botões Iniciar/Pausar/Retomar/Finalizar
+ *   board-buttons       -> botão "Relatório de Tempo" no topo do quadro (modal)
  *   show-settings       -> tela de configurações (/views/settings.html)
  *
  * A detecção AUTOMÁTICA por mudança de lista é feita dentro do card-badges:
@@ -24,6 +25,7 @@ import { formatDuration, now } from './utils/time.js';
 
 const ICON = {
   clock: './public/icons/clock.svg',
+  clockLight: './public/icons/clock-light.svg',
   play: './public/icons/play.svg',
   pause: './public/icons/pause.svg',
   resume: './public/icons/resume.svg',
@@ -113,6 +115,22 @@ window.TrelloPowerUp.initialize({
       }
       return btns;
     });
+  },
+
+  // ---- Botão do quadro: Relatório de Tempo -----------------------------
+  // Abre um modal com a tabela consolidada de todos os cards + exportação CSV.
+  'board-buttons': function () {
+    return [{
+      // dark = ícone para cabeçalho escuro (branco); light = para claro (cinza).
+      icon: { dark: ICON.clockLight, light: ICON.clock },
+      text: 'Relatório de Tempo',
+      callback: (tt) => tt.modal({
+        title: 'Relatório de Tempo',
+        url: tt.signUrl('./views/report.html'),
+        fullscreen: false,
+        height: 600,
+      }),
+    }];
   },
 
   // ---- Configurações ---------------------------------------------------
