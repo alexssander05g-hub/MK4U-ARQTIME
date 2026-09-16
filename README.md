@@ -48,6 +48,12 @@ semana ISO começando na segunda; você não informa datas), e **Por sessão**
 (cada sessão com seu tempo e dias). Cada aba tem **exportação para CSV**
 (abre no Excel/Google Sheets).
 
+No topo do relatório há um **seletor de membro**: escolhendo uma pessoa, todas
+as abas (e o CSV) passam a mostrar só os cards em que ela está **atribuída** (os
+avatares do card). É filtro por atribuição — o cronômetro do card é único e
+compartilhado, não "tempo por pessoa". Quando a configuração conta pausas, o
+relatório traz também a coluna **Pausado**, além do tempo efetivo — como no card.
+
 Sobre o que aparece **onde**:
 - **Na frente do card:** os **dias úteis ativos** (ex.: `▶ 3d`), com a cor do
   status. Fins de semana não contam; a contagem para ao ir para "Concluído".
