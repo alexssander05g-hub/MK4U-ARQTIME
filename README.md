@@ -41,12 +41,21 @@ O fluxo do quadro é **A FAZER → EM ANDAMENTO → CONCLUÍDO**.
 Além do automático, há botões manuais **▶ Iniciar / ⏸ Pausar / ▶ Retomar /
 ⏹ Finalizar**.
 
-No topo do quadro há também o botão **"Relatório de Tempo"**: abre um modal com
-a tabela consolidada de todos os cards (lista, status, início, conclusão,
-sessões e tempo efetivo), com o **total do quadro** e **exportação para CSV**
-(abre no Excel/Google Sheets). O relatório é 100% client-side — lê o tempo de
-todos os cards de uma vez via `t.getAll()` e usa a mesma função `computeTotals`
-do card, então os números batem exatamente com o verso de cada card.
+No topo do quadro há também o botão **"Relatório de Tempo"**: abre um modal em
+**abas** — **Geral** (todos os cards: dias úteis, sessões e tempo, com total do
+quadro), **Semanal** e **Mensal** (agrupados automaticamente pelo calendário —
+semana ISO começando na segunda; você não informa datas), e **Por sessão**
+(cada sessão com seu tempo e dias). Cada aba tem **exportação para CSV**
+(abre no Excel/Google Sheets).
+
+Sobre o que aparece **onde**:
+- **Na frente do card:** os **dias úteis ativos** (ex.: `▶ 3d`), com a cor do
+  status. Fins de semana não contam; a contagem para ao ir para "Concluído".
+- **No verso do card e no CSV:** o **tempo** (ex.: `02h 30min`), além dos dias.
+
+O relatório é 100% client-side — lê o estado de cada card (usando o id do card
+como escopo no `t.get`) e usa as mesmas funções puras do card, então os números
+batem exatamente com o verso de cada card.
 
 ### A decisão de arquitetura central
 
@@ -114,6 +123,8 @@ trello-timetracker/
 │   │   │                      #   e computeTotals(). Zero dependência do Trello → testável.
 │   │   ├── storage.js         # ÚNICA camada que fala com t.get/t.set (pluginData). Config do
 │   │   │                      #   quadro + estado do card + reconcileAndPersist().
+│   │   ├── report.js          # ★ Agregações PURAS: dias úteis ativos, semana ISO/mês,
+│   │   │                      #   buildReport() (Geral/Semanal/Mensal/Por sessão). Testável.
 │   │   └── exporter.js        # Estado → linha de relatório + toCsv() (gerador CSV puro).
 │   │                          #   Usado pelo relatório do quadro; base para a V2 (Sheets).
 │   │
@@ -125,8 +136,8 @@ trello-timetracker/
 │   ├── views/
 │   │   ├── sectionView.js     # Controla o painel "Controle de Tempo" do verso do card.
 │   │   ├── settingsView.js    # Controla a tela de configurações (seletores de lista etc.).
-│   │   └── reportView.js      # Relatório consolidado do quadro (lê todos os cards via
-│   │                          #   t.getAll()) + tabela + exportação CSV. Client-side.
+│   │   └── reportView.js      # Relatório do quadro em abas (Geral/Semanal/Mensal/Por
+│   │                          #   sessão) + dias úteis + exportação CSV. Client-side.
 │   │
 │   └── styles/
 │       └── powerup.css        # Visual minimalista, alinhado aos tokens do Trello.
@@ -317,25 +328,25 @@ sessões, reabertura, detecção automática e horas úteis — todos passando.)
 
 ---
 
-## 11. Já entregue na V1 e Roadmap V2
+## 11. Já entregue e Roadmap
 
-**Já na V1:** relatório consolidado do quadro (botão "Relatório de Tempo") com
-tabela de todos os cards, total do quadro e **exportação CSV** — tudo
-client-side, via `t.getAll()` + `computeTotals` + `exporter.toCsv`.
+**V1:** rastreamento automático, badges, pausa, sessões, reabertura, horas úteis.
 
-A base foi feita para **não** ser descartável. Próximos pontos de extensão, já
-isolados:
+**V2 (relatório):** relatório consolidado do quadro + exportação CSV, client-side.
 
-- **Dashboard visual** (gráficos: tempo médio/total, por pessoa, por projeto,
-  produtividade semanal/mensal): agregar os mesmos dados que o relatório já
-  reúne e desenhar. Renderizável em modal/board-bar, sem backend.
+**V3:** **dias úteis ativos** por card (na frente do card e no relatório; para no
+"Concluído", sem contar fins de semana), relatório em **abas Geral / Semanal /
+Mensal / Por sessão** com agrupamento automático por calendário, **tempo por
+sessão**, e ícones novos (relógio + calendário). Tudo client-side, via
+`report.js` (`cardActiveDays`, `buildReport`) + `exporter.toCsv`.
+
+A base continua feita para **não** ser descartável. Próximos pontos, já isolados:
+
+- **Dashboard visual** (gráficos a partir dos mesmos dados do relatório).
 - **Google Sheets automático**: `exporter.toRow` já gera as linhas; o envio a
-  uma planilha externa exige um pequeno backend + OAuth (token via
-  `t.authorize`/`t.storeSecret`). É o único passo que precisa de servidor.
-- **Relatórios avançados** (tarefas mais demoradas, comparação entre semanas):
-  consomem os `_raw` de `exporter.toRow` (números crus para agregação).
+  uma planilha externa exige backend + OAuth. Único passo que precisa de servidor.
 - **Horário do movimento exato**: webhooks da REST API para carimbar o servidor
-  (resolve a limitação de detecção descrita na seção 2).
+  (resolve a limitação de detecção da seção 2) e permitiria contar "dias" só com
+  trabalho real (hoje contamos o intervalo da sessão — ver `report.js`).
 
-O núcleo (`tracker.js` + `utils`) é puro e já cobre todos esses caminhos sem
-reescrita.
+O núcleo (`tracker.js` + `report.js` + `utils`) é puro e já cobre esses caminhos.
