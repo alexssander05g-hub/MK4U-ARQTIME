@@ -140,8 +140,51 @@ body {
 .tt-select {
   font-family: inherit; font-size: 13px; color: var(--tt-text);
   padding: 5px 8px; border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
-  background: var(--tt-bg); max-width: 240px;
+  background: var(--tt-bg); max-width: 220px;
 }
+.tt-report-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tt-search {
+  font-family: inherit; font-size: 13px; color: var(--tt-text);
+  padding: 5px 8px; border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
+  background: var(--tt-bg); min-width: 160px;
+}
+
+/* cabeçalho ordenável */
+.tt-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.tt-th-sort:hover { color: var(--tt-text); }
+.tt-th-sort.is-active { color: var(--tt-blue); }
+
+/* painel / gráficos de barras */
+.tt-dash { padding: 8px 10px; }
+.tt-chart { margin-bottom: 18px; }
+.tt-chart:last-child { margin-bottom: 4px; }
+.tt-chart-title { font-weight: 600; font-size: 13px; margin-bottom: 8px; color: var(--tt-text); }
+.tt-bar-row { display: grid; grid-template-columns: 40% 1fr auto; align-items: center; gap: 8px; margin-bottom: 5px; }
+.tt-bar-label { font-size: 12px; color: var(--tt-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-bar-track { background: var(--tt-bg-soft); border-radius: 6px; height: 14px; overflow: hidden; }
+.tt-bar-fill { background: var(--tt-blue); height: 100%; border-radius: 6px; min-width: 2px; }
+.tt-bar-val { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--tt-subtle); white-space: nowrap; }
+
+/* editor inline de registro (verso do card) */
+.tt-link-btn {
+  border: none; background: none; cursor: pointer; font-family: inherit;
+  color: var(--tt-blue); font-size: 12px; padding: 2px 4px;
+}
+.tt-link-btn:hover { text-decoration: underline; }
+.tt-session-edit { margin-left: auto; }
+.tt-btn-sm { padding: 4px 10px; font-size: 12px; }
+.tt-editor {
+  border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
+  padding: 8px; margin: 4px 0 8px; background: var(--tt-bg-soft);
+}
+.tt-editor-fields { display: flex; gap: 10px; flex-wrap: wrap; }
+.tt-dt-label { display: flex; flex-direction: column; font-size: 11px; color: var(--tt-subtle); gap: 3px; }
+.tt-dt {
+  font-family: inherit; font-size: 12px; padding: 4px 6px;
+  border: 1px solid var(--tt-border); border-radius: var(--tt-radius); background: var(--tt-bg); color: var(--tt-text);
+}
+.tt-editor-actions { display: flex; gap: 6px; align-items: center; margin-top: 8px; }
+.tt-editor-err { color: var(--tt-red, #c0392b); font-size: 12px; margin-right: auto; }
 .tt-report-actions { display: flex; gap: 6px; }
 .tt-report-empty { color: var(--tt-subtle); padding: 24px 8px; text-align: center; line-height: 1.5; }
 
