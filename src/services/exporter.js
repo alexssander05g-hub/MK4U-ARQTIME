@@ -47,3 +47,31 @@ export function toRow({ cardName, member = '', project = '', state, config }) {
 
 /** Cabeçalho correspondente (útil para CSV / Sheets). */
 export const REPORT_HEADERS = ['Card', 'Responsável', 'Início', 'Conclusão', 'Tempo', 'Projeto'];
+
+/**
+ * Gera um CSV a partir de um cabeçalho + linhas (arrays de valores). PURO.
+ *
+ * Detalhes que importam na prática:
+ *   - Separador padrão ';' — é o que o Excel em pt-BR espera; o Google Sheets
+ *     também detecta. (Passe ',' se preferir o padrão internacional.)
+ *   - Cada campo é "escapado" (aspas duplas) só quando contém o separador,
+ *     aspas ou quebra de linha — seguindo a convenção RFC-4180.
+ *   - Linhas terminam em CRLF (\r\n), o formato mais compatível com planilhas.
+ *
+ * A responsabilidade de adicionar BOM (para acentos no Excel) fica em quem
+ * escreve o arquivo — aqui devolvemos apenas o texto puro.
+ *
+ * @param {string[]} headers
+ * @param {Array<Array<string|number>>} rows
+ * @param {string} [sep=';']
+ * @returns {string}
+ */
+export function toCsv(headers, rows, sep = ';') {
+  const needsQuote = new RegExp('["\\n\\r' + sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ']');
+  const esc = (v) => {
+    const s = v == null ? '' : String(v);
+    return needsQuote.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const line = (arr) => arr.map(esc).join(sep);
+  return [line(headers), ...rows.map(line)].join('\r\n');
+}
