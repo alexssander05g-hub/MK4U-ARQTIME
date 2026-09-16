@@ -2,14 +2,22 @@
  * reportView.js — Relatório consolidado do quadro (aberto pelo botão do quadro,
  * dentro de um modal).
  *
- * COMO LÊ O TEMPO DE TODOS OS CARDS DE UMA VEZ
- * --------------------------------------------
- * Um botão de quadro roda em contexto de QUADRO (não de card). Para não disparar
- * uma chamada de rede por card (`t.get` card a card), usamos `t.getAll()`, que
- * devolve, de uma só vez, TODO o pluginData que este Power-Up guardou no quadro.
- * De lá tiramos o estado de cada card (escopo card/shared, chave "tt") e
+ * COMO LÊ O TEMPO DE TODOS OS CARDS
+ * ---------------------------------
+ * Um botão de quadro roda em contexto de QUADRO (não de card). O estado de cada
+ * card é lido passando o PRÓPRIO ID DO CARD como escopo no t.get — a doc do
+ * Trello lista "o ID de um card do quadro" como escopo válido. Assim lemos, de
+ * qualquer contexto, o estado (escopo card/shared, chave "tt") de cada card e
  * aplicamos a MESMA função pura `computeTotals` que o card usa — ou seja, os
  * números do relatório batem exatamente com os do verso de cada card.
+ *
+ * (Isso gera uma leitura por card. Para os volumes típicos de um quadro é
+ * tranquilo; se um dia precisar de leitura em massa real, o caminho é a REST
+ * API `GET /boards/{id}/pluginData` — que exige backend + token, portanto V2.)
+ *
+ * NOTA: uma tentativa anterior usou `t.getAll()`, mas no contexto de quadro ele
+ * não traz o estado por card (não há "card atual"), então o relatório vinha
+ * zerado. Ler pelo id de cada card é o caminho correto.
  *
  * Tudo aqui é client-side: nenhuma chamada a servidor próprio, nenhum token.
  * (O envio automático para Google Sheets é o passo seguinte da V2, pois escrever
@@ -38,16 +46,14 @@ const STATUS_LABEL = {
 let MODEL = null;            // { rows, config } — carregado uma vez
 let includeUntracked = false; // mostrar também cards sem tempo?
 
-// -- montagem das linhas (a partir do getAll) ------------------------------
+// -- montagem das linhas (estado lido por card) ----------------------------
 
-function computeRows(cards, listName, cardData, config) {
+function computeRows(cards, states, listName, config) {
   const at = now();
   return cards
-    .map((c) => {
-      // Defensivo quanto ao formato do getAll: aceita card[id].shared.tt e card[id].tt
-      const entry = cardData[c.id] || {};
-      const raw = (entry.shared && entry.shared.tt) || entry.tt || null;
-      const state = normalize(raw); // normalize(null) => estado 'idle'
+    .map((c, i) => {
+      const raw = states[i] || null;          // estado lido pelo id do card
+      const state = normalize(raw);            // normalize(null) => estado 'idle'
       const totals = computeTotals(state, at, config);
       return {
         card: c.name,
@@ -236,14 +242,17 @@ async function boot() {
   const root = document.getElementById('app');
   try {
     const config = await getConfig(t);
-    const [cards, lists, all] = await Promise.all([
+    const [cards, lists] = await Promise.all([
       t.cards('id', 'name', 'idList'),
       t.lists('id', 'name'),
-      t.getAll(),
     ]);
     const listName = new Map(lists.map((l) => [l.id, l.name]));
-    const cardData = (all && all.card) ? all.card : {};
-    MODEL = { rows: computeRows(cards, listName, cardData, config), config };
+    // Lê o estado de cada card usando o ID do card como escopo do t.get.
+    // (.catch → null mantém o relatório de pé mesmo se um card específico falhar.)
+    const states = await Promise.all(
+      cards.map((c) => t.get(c.id, 'shared', 'tt').catch(() => null))
+    );
+    MODEL = { rows: computeRows(cards, states, listName, config), config };
     render();
   } catch (e) {
     clear(root);
