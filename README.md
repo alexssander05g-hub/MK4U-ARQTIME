@@ -41,6 +41,13 @@ O fluxo do quadro é **A FAZER → EM ANDAMENTO → CONCLUÍDO**.
 Além do automático, há botões manuais **▶ Iniciar / ⏸ Pausar / ▶ Retomar /
 ⏹ Finalizar**.
 
+No topo do quadro há também o botão **"Relatório de Tempo"**: abre um modal com
+a tabela consolidada de todos os cards (lista, status, início, conclusão,
+sessões e tempo efetivo), com o **total do quadro** e **exportação para CSV**
+(abre no Excel/Google Sheets). O relatório é 100% client-side — lê o tempo de
+todos os cards de uma vez via `t.getAll()` e usa a mesma função `computeTotals`
+do card, então os números batem exatamente com o verso de cada card.
+
 ### A decisão de arquitetura central
 
 Três fatos da documentação atual do Trello moldaram todo o projeto:
@@ -107,8 +114,8 @@ trello-timetracker/
 │   │   │                      #   e computeTotals(). Zero dependência do Trello → testável.
 │   │   ├── storage.js         # ÚNICA camada que fala com t.get/t.set (pluginData). Config do
 │   │   │                      #   quadro + estado do card + reconcileAndPersist().
-│   │   └── exporter.js        # "Costura" da V2: transforma estado em linha de relatório
-│   │                          #   (Card|Responsável|Início|Conclusão|Tempo|Projeto). Puro.
+│   │   └── exporter.js        # Estado → linha de relatório + toCsv() (gerador CSV puro).
+│   │                          #   Usado pelo relatório do quadro; base para a V2 (Sheets).
 │   │
 │   ├── utils/
 │   │   ├── time.js            # formatDuration / formatDateTime / now — puros.
@@ -117,14 +124,17 @@ trello-timetracker/
 │   │
 │   ├── views/
 │   │   ├── sectionView.js     # Controla o painel "Controle de Tempo" do verso do card.
-│   │   └── settingsView.js    # Controla a tela de configurações (seletores de lista etc.).
+│   │   ├── settingsView.js    # Controla a tela de configurações (seletores de lista etc.).
+│   │   └── reportView.js      # Relatório consolidado do quadro (lê todos os cards via
+│   │                          #   t.getAll()) + tabela + exportação CSV. Client-side.
 │   │
 │   └── styles/
 │       └── powerup.css        # Visual minimalista, alinhado aos tokens do Trello.
 │
 ├── views/
 │   ├── section.html           # Página (iframe) do painel do verso do card.
-│   └── settings.html          # Página (iframe) das configurações.
+│   ├── settings.html          # Página (iframe) das configurações.
+│   └── report.html            # Página (iframe) do relatório (abre num modal do quadro).
 │
 ├── public/icons/              # SVGs: badge/botões/ícone do manifest.
 │
@@ -300,23 +310,32 @@ sessões, reabertura, detecção automática e horas úteis — todos passando.)
 | ☑ Reabertura cria nova sessão | mova de Concluído p/ Em andamento → Sessão 2 |
 | ☑ Configuração de listas funciona | escolha listas nas Configurações |
 | ☑ Dados permanecem salvos | trocar de máquina mantém tudo (pluginData) |
+| ☑ Relatório do quadro abre | botão "Relatório de Tempo" no topo → modal com tabela |
+| ☑ Total do quadro confere | soma dos cards = total no rodapé da tabela |
+| ☑ Exportar CSV funciona | botão "Baixar CSV" (ou "Copiar") → abre no Excel/Sheets |
 | ☑ README explica instalação | esta seção 7 |
 
 ---
 
-## 11. Roadmap V2
+## 11. Já entregue na V1 e Roadmap V2
 
-A base foi feita para **não** ser descartável. Pontos de extensão já isolados:
+**Já na V1:** relatório consolidado do quadro (botão "Relatório de Tempo") com
+tabela de todos os cards, total do quadro e **exportação CSV** — tudo
+client-side, via `t.getAll()` + `computeTotals` + `exporter.toCsv`.
 
-- **Dashboard** (cards concluídos, tempo médio/total, por pessoa, por projeto,
-  produtividade semanal/mensal): iterar `t.cards('all')` → `storage.getState` →
-  `exporter.toRow` → agregar. Renderizar num `board-button` com popup/iframe.
-- **Google Sheets**: mesma `exporter.toRow` gera as linhas
-  `Card|Responsável|Início|Conclusão|Tempo|Projeto`; o envio exige um pequeno
-  backend + OAuth (token via `t.authorize`/`t.storeSecret`).
-- **Relatórios** (tarefas mais demoradas, volume por pessoa, comparação entre
-  semanas): consomem os `_raw` de `exporter.toRow` (números crus para agregação).
-- **Horário do movimento exato**: webhooks da REST API para carimbar o servidor.
+A base foi feita para **não** ser descartável. Próximos pontos de extensão, já
+isolados:
+
+- **Dashboard visual** (gráficos: tempo médio/total, por pessoa, por projeto,
+  produtividade semanal/mensal): agregar os mesmos dados que o relatório já
+  reúne e desenhar. Renderizável em modal/board-bar, sem backend.
+- **Google Sheets automático**: `exporter.toRow` já gera as linhas; o envio a
+  uma planilha externa exige um pequeno backend + OAuth (token via
+  `t.authorize`/`t.storeSecret`). É o único passo que precisa de servidor.
+- **Relatórios avançados** (tarefas mais demoradas, comparação entre semanas):
+  consomem os `_raw` de `exporter.toRow` (números crus para agregação).
+- **Horário do movimento exato**: webhooks da REST API para carimbar o servidor
+  (resolve a limitação de detecção descrita na seção 2).
 
 O núcleo (`tracker.js` + `utils`) é puro e já cobre todos esses caminhos sem
 reescrita.
