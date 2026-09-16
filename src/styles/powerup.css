@@ -137,6 +137,11 @@ body {
 .tt-report-meta { display: flex; flex-direction: column; gap: 6px; }
 .tt-report-summary { color: var(--tt-subtle); font-size: 13px; }
 .tt-report-toggle { font-size: 13px; color: var(--tt-text); }
+.tt-select {
+  font-family: inherit; font-size: 13px; color: var(--tt-text);
+  padding: 5px 8px; border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
+  background: var(--tt-bg); max-width: 240px;
+}
 .tt-report-actions { display: flex; gap: 6px; }
 .tt-report-empty { color: var(--tt-subtle); padding: 24px 8px; text-align: center; line-height: 1.5; }
 
