@@ -117,6 +117,28 @@ function monthLabel(ms) {
   return s.charAt(0).toUpperCase() + s.slice(1); // "Setembro de 2026"
 }
 
+/**
+ * Tempo efetivo por MEMBRO (para o painel de gráficos). Como o cronômetro do
+ * card é compartilhado, o tempo de um card é atribuído a CADA membro atribuído
+ * a ele (atribuição compartilhada — não é "tempo individual").
+ * @param {{memberIds:Iterable<string>, state:object}[]} cards
+ * @returns {{memberId:string, effectiveMs:number, cardCount:number}[]} desc
+ */
+export function timeByMember(cards, at, config) {
+  const map = new Map();
+  for (const c of cards) {
+    const eff = computeTotals(c.state, at, config).effectiveMs;
+    if (eff <= 0) continue;
+    for (const id of c.memberIds) {
+      const cur = map.get(id) || { memberId: id, effectiveMs: 0, cardCount: 0 };
+      cur.effectiveMs += eff;
+      cur.cardCount += 1;
+      map.set(id, cur);
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => b.effectiveMs - a.effectiveMs);
+}
+
 // -- construção do relatório -----------------------------------------------
 
 /**

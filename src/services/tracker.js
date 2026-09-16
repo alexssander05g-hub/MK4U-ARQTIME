@@ -132,6 +132,36 @@ export function finish(state, at, meta = 'finish') {
   return pushHistory(s, meta, at);
 }
 
+// -- edição manual de registros (correção) ---------------------------------
+
+/**
+ * Corrige manualmente o início/fim de uma sessão CONCLUÍDA (índice em
+ * `sessions`). Ordena os dois instantes (tolera troca), e nunca deixa a pausa
+ * acumulada maior que o novo intervalo. Marca a edição no histórico ('edit').
+ * PURA: recebe estado, devolve novo estado.
+ */
+export function editSession(state, index, newStartMs, newEndMs, at) {
+  const s = normalize(state);
+  if (index < 0 || index >= s.sessions.length) return s;
+  const start = Math.min(newStartMs, newEndMs);
+  const end = Math.max(newStartMs, newEndMs);
+  const span = Math.max(0, end - start);
+  const prev = s.sessions[index];
+  const sessions = s.sessions.slice();
+  sessions[index] = { ...prev, startedAt: start, endedAt: end, pausedMs: Math.min(prev.pausedMs || 0, span) };
+  return pushHistory({ ...s, sessions }, 'edit', at);
+}
+
+/** Corrige o início da sessão ABERTA (o fim é sempre "agora"). */
+export function editOpenStart(state, newStartMs, at) {
+  const s = normalize(state);
+  if (!s.session) return s;
+  const start = Math.min(newStartMs, at);
+  const elapsed = Math.max(0, at - start);
+  const session = { ...s.session, startedAt: start, pausedMs: Math.min(s.session.pausedMs || 0, elapsed) };
+  return pushHistory({ ...s, session }, 'edit', at);
+}
+
 // -- detecção automática por movimentação de lista -------------------------
 
 /**
