@@ -12,6 +12,7 @@ import {
 import {
   computeTotals, start, pause, resume, finish, Status,
 } from '../services/tracker.js';
+import { cardActiveDays } from '../services/report.js';
 import {
   formatDuration, formatDateTimeLong, formatHistory, now,
 } from '../utils/time.js';
@@ -94,6 +95,13 @@ function render() {
   container.appendChild(row('Início', formatDateTimeLong(totals.firstStart)));
   if (state.status === Status.DONE) {
     container.appendChild(row('Conclusão', formatDateTimeLong(totals.lastEnd)));
+  }
+
+  // DIAS ÚTEIS ATIVOS (sem contar fins de semana; para no "Concluído")
+  if (state.status !== Status.IDLE) {
+    const days = cardActiveDays(state, now(), config);
+    container.appendChild(row('Dias úteis ativos',
+      el('span', { class: 'tt-value', text: `${days} ${days === 1 ? 'dia' : 'dias'}` })));
   }
 
   // PAUSAS (só quando houver e quando a config contabiliza)
