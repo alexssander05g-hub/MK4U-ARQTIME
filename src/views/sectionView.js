@@ -10,7 +10,7 @@ import {
   getConfig, getState, apply, reconcileAndPersist,
 } from '../services/storage.js';
 import {
-  computeTotals, start, pause, resume, finish, Status,
+  computeTotals, start, pause, resume, finish, editSession, editOpenStart, Status,
 } from '../services/tracker.js';
 import { cardActiveDays } from '../services/report.js';
 import {
@@ -23,6 +23,7 @@ const t = window.TrelloPowerUp.iframe();
 let config = null;
 let state = null;
 let tickTimer = null;
+let editing = null; // índice da sessão em edição, ou 'open', ou null
 
 const HISTORY_LABEL = {
   start: 'Iniciado', pause: 'Pausado', resume: 'Retomado', finish: 'Finalizado',
@@ -31,6 +32,7 @@ const HISTORY_LABEL = {
   'auto-pause': 'Pausado (mudança de lista)',
   'auto-resume': 'Retomado (mudança de lista)',
   reopen: 'Reaberto',
+  edit: 'Corrigido manualmente',
 };
 
 const STATUS_LABEL = {
@@ -66,6 +68,49 @@ function buttonsFor(status) {
     row.appendChild(actionButton('⏹ Finalizar', 'is-danger', finish));
   }
   return row;
+}
+
+// -- edição manual de registros -------------------------------------------
+
+function toLocalInput(ms) {
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function fromLocalInput(str) {
+  const ms = new Date(str).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * Editor inline de datas. `onSave(state, ns, ne, at)` deve devolver o novo
+ * estado (usa editSession/editOpenStart). Se `endMs` for null, só edita início.
+ */
+function editorRow(startMs, endMs, onSave) {
+  const inStart = el('input', { type: 'datetime-local', class: 'tt-dt', value: toLocalInput(startMs) });
+  const inEnd = endMs != null ? el('input', { type: 'datetime-local', class: 'tt-dt', value: toLocalInput(endMs) }) : null;
+  const err = el('span', { class: 'tt-editor-err' });
+
+  const save = el('button', {
+    class: 'tt-btn is-primary tt-btn-sm', text: 'Salvar',
+    onclick: async () => {
+      const ns = fromLocalInput(inStart.value);
+      const ne = inEnd ? fromLocalInput(inEnd.value) : null;
+      if (ns == null || (inEnd && ne == null)) { err.textContent = 'Data inválida.'; return; }
+      await apply(t, (s, at) => onSave(s, ns, ne, at));
+      editing = null;
+      state = await getState(t);
+      render();
+    },
+  });
+  const cancel = el('button', { class: 'tt-btn tt-btn-sm', text: 'Cancelar', onclick: () => { editing = null; render(); } });
+
+  const fields = [el('label', { class: 'tt-dt-label' }, ['Início', inStart])];
+  if (inEnd) fields.push(el('label', { class: 'tt-dt-label' }, ['Fim', inEnd]));
+  return el('div', { class: 'tt-editor' }, [
+    el('div', { class: 'tt-editor-fields' }, fields),
+    el('div', { class: 'tt-editor-actions' }, [err, cancel, save]),
+  ]);
 }
 
 function row(label, valueNode) {
@@ -118,6 +163,18 @@ function render() {
   // BOTÕES
   container.appendChild(buttonsFor(state.status));
 
+  // CORRIGIR início da sessão em aberto
+  if (state.session) {
+    container.appendChild(el('button', {
+      class: 'tt-link-btn', text: '✎ Corrigir início da sessão atual',
+      onclick: () => { editing = editing === 'open' ? null : 'open'; render(); },
+    }));
+    if (editing === 'open') {
+      container.appendChild(editorRow(state.session.startedAt, null,
+        (s, ns, _ne, at) => editOpenStart(s, ns, at)));
+    }
+  }
+
   // SESSÕES (quando há mais de uma, ou uma concluída + total acumulado)
   if (state.sessions.length > 0) {
     const box = el('div', { class: 'tt-block' }, [el('div', { class: 'tt-block-title', text: 'Sessões' })]);
@@ -128,7 +185,13 @@ function render() {
         el('span', { class: 'tt-session-range',
           text: `${formatHistory(s.startedAt)} → ${formatHistory(s.endedAt)}` }),
         el('span', { class: 'tt-session-time', text: formatDuration(eff, config.timeFormat) }),
+        el('button', { class: 'tt-link-btn tt-session-edit', text: '✎', title: 'Corrigir esta sessão',
+          onclick: () => { editing = editing === i ? null : i; render(); } }),
       ]));
+      if (editing === i) {
+        box.appendChild(editorRow(s.startedAt, s.endedAt,
+          (st, ns, ne, at) => editSession(st, i, ns, ne, at)));
+      }
     });
     box.appendChild(el('div', { class: 'tt-session tt-total' }, [
       el('span', { class: 'tt-session-idx', text: 'Total acumulado' }),
