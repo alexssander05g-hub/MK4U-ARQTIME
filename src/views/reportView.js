@@ -1,19 +1,26 @@
 /**
  * reportView.js — Relatório do quadro (modal do botão de quadro).
  *
- * ABAS: Geral · Semanal · Mensal · Por sessão. O agrupamento por semana/mês é
- * automático pelo calendário (semana ISO, começa na segunda) — o usuário não
- * informa datas. Toda a matemática vem do módulo puro `report.js`; aqui só
- * buscamos os dados e desenhamos.
+ * ABAS: Geral · Semanal · Mensal · Por sessão. Agrupamento semanal/mensal
+ * automático pelo calendário (semana ISO, começa na segunda).
  *
- * COMO LÊ O TEMPO DE CADA CARD
- * ----------------------------
- * Contexto de QUADRO. O estado de cada card é lido passando o ID do card como
- * escopo no `t.get` (a doc lista "o ID de um card do quadro" como escopo válido)
- * — uma leitura por card. Depois, `buildReport` aplica as mesmas funções puras
- * do card, então os números do relatório batem com o verso de cada card.
- * Tudo client-side: sem backend, sem token. (Leitura em massa real exigiria a
- * REST API `GET /boards/{id}/pluginData` + backend + token — V2.)
+ * FILTRO POR MEMBRO
+ * -----------------
+ * Um seletor no topo filtra TODAS as abas (e o CSV) pelos cards em que a pessoa
+ * está ATRIBUÍDA (os avatares do card). Isso NÃO é "tempo por pessoa": um card
+ * tem um cronômetro só, compartilhado — o filtro apenas restringe QUAIS cards
+ * entram. Os nomes vêm dos próprios cards (t.cards(...,'members')), client-side.
+ *
+ * TEMPO PAUSADO
+ * -------------
+ * Quando a configuração conta pausas, o relatório mostra a coluna "Pausado"
+ * além do tempo efetivo — como no verso do card.
+ *
+ * COMO LÊ O ESTADO DE CADA CARD
+ * -----------------------------
+ * Contexto de QUADRO: lê passando o ID do card como escopo no `t.get` (uma
+ * leitura por card). `buildReport` usa as mesmas funções puras do card, então
+ * os números batem. Client-side; leitura em massa real seria REST API + token.
  */
 
 import { getConfig } from '../services/storage.js';
@@ -36,39 +43,65 @@ const TABS = [
   { id: 'sessoes', label: 'Por sessão' },
 ];
 
-let MODEL = null;             // { report, config }
+let MODEL = null;             // { allCards, members, config, at }
 let activeTab = 'geral';
 let includeUntracked = false; // só afeta a aba Geral
+let selectedMemberId = '';    // '' = todos
 
 const fmt = (ms) => formatDuration(ms, MODEL.config.timeFormat);
+const showPaused = () => !!MODEL.config.countPauses;
+
+// -- relatório filtrado (memoizado por membro) -----------------------------
+
+let _cacheId = null;
+let _cacheReport = null;
+function getReport() {
+  if (_cacheReport && _cacheId === selectedMemberId) return _cacheReport;
+  const filtered = selectedMemberId
+    ? MODEL.allCards.filter((c) => c.memberIds.has(selectedMemberId))
+    : MODEL.allCards;
+  _cacheReport = buildReport(
+    filtered.map((c) => ({ name: c.name, lista: c.lista, state: c.state })),
+    MODEL.at, MODEL.config,
+  );
+  _cacheId = selectedMemberId;
+  return _cacheReport;
+}
 
 // -- exportação ------------------------------------------------------------
 
 function csvForTab() {
-  const r = MODEL.report;
+  const r = getReport();
+  const paused = showPaused();
   if (activeTab === 'geral') {
+    const head = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Dias', 'Sessões',
+      ...(paused ? ['Pausado'] : []), 'Tempo efetivo', 'Tempo (ms)'];
     const rows = (includeUntracked ? r.general : r.general.filter((x) => x.tracked)).map((x) => [
       x.card, x.lista, STATUS_LABEL[x.status],
       x.inicio ? formatDateTime(x.inicio) : '', x.conclusao ? formatDateTime(x.conclusao) : '',
-      x.days, x.sessions, fmt(x.effectiveMs), x.effectiveMs,
+      x.days, x.sessions, ...(paused ? [fmt(x.pausedMs)] : []), fmt(x.effectiveMs), x.effectiveMs,
     ]);
-    return toCsv(['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Dias', 'Sessões', 'Tempo efetivo', 'Tempo (ms)'], rows);
+    return toCsv(head, rows);
   }
   if (activeTab === 'sessoes') {
+    const head = ['Card', 'Início', 'Fim', 'Dias', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
     const rows = r.sessions.map((s) => [
       s.card, formatDateTime(s.startedAt), s.endedAt ? formatDateTime(s.endedAt) : '(em aberto)',
-      s.days, fmt(s.effectiveMs), s.effectiveMs,
+      s.days, ...(paused ? [fmt(s.pausedMs)] : []), fmt(s.effectiveMs), s.effectiveMs,
     ]);
-    return toCsv(['Card', 'Início', 'Fim', 'Dias', 'Tempo', 'Tempo (ms)'], rows);
+    return toCsv(head, rows);
   }
-  // semanal / mensal
   const periods = activeTab === 'semanal' ? r.weekly : r.monthly;
-  const head = activeTab === 'semanal' ? 'Semana' : 'Mês';
+  const label = activeTab === 'semanal' ? 'Semana' : 'Mês';
+  const head = [label, 'Card', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
   const rows = [];
   for (const p of periods) {
-    for (const row of p.rows) rows.push([p.label, row.card, row.days, row.sessions, fmt(row.effectiveMs), row.effectiveMs]);
+    for (const row of p.rows) {
+      rows.push([p.label, row.card, row.days, row.sessions,
+        ...(paused ? [fmt(row.pausedMs)] : []), fmt(row.effectiveMs), row.effectiveMs]);
+    }
   }
-  return toCsv([head, 'Card', 'Dias', 'Sessões', 'Tempo', 'Tempo (ms)'], rows);
+  return toCsv(head, rows);
 }
 
 function downloadCsv(filename, text) {
@@ -109,10 +142,7 @@ function flash(btn, msg, ms = 1600) {
 
 function th(text, cls) { return el('th', cls ? { class: cls, text } : { text }); }
 function td(text, cls) { return el('td', cls ? { class: cls, text } : { text }); }
-
-function statusChip(status) {
-  return el('span', { class: `tt-badge-mini st-${status}`, text: STATUS_LABEL[status] });
-}
+function statusChip(status) { return el('span', { class: `tt-badge-mini st-${status}`, text: STATUS_LABEL[status] }); }
 
 function tableEl(headCells, bodyRows, footCells) {
   const parts = [el('thead', {}, el('tr', {}, headCells)), el('tbody', {}, bodyRows)];
@@ -122,46 +152,60 @@ function tableEl(headCells, bodyRows, footCells) {
 
 // -- abas ------------------------------------------------------------------
 
-function renderGeral() {
-  const rows = includeUntracked ? MODEL.report.general : MODEL.report.general.filter((x) => x.tracked);
+function renderGeral(r) {
+  const paused = showPaused();
+  const rows = includeUntracked ? r.general : r.general.filter((x) => x.tracked);
   if (rows.length === 0) {
-    return el('div', { class: 'tt-report-empty', text: 'Nenhum card com tempo registrado ainda. Mova um card para a lista de início (ou clique em "Iniciar") para começar.' });
+    return el('div', { class: 'tt-report-empty', text: 'Nenhum card com tempo para este filtro.' });
   }
-  const totalMs = rows.reduce((a, r) => a + r.effectiveMs, 0);
-  const body = rows.map((r) => el('tr', {}, [
-    td(r.card, 'tt-td-card'), td(r.lista),
-    el('td', {}, statusChip(r.status)),
-    td(r.inicio ? formatDateTime(r.inicio) : '—', 'nowrap'),
-    td(r.conclusao ? formatDateTime(r.conclusao) : '—', 'nowrap'),
-    td(String(r.days), 'num'), td(String(r.sessions), 'num'), td(fmt(r.effectiveMs), 'num'),
+  const totalMs = rows.reduce((a, x) => a + x.effectiveMs, 0);
+  const totalPaused = rows.reduce((a, x) => a + x.pausedMs, 0);
+  const body = rows.map((x) => el('tr', {}, [
+    td(x.card, 'tt-td-card'), td(x.lista),
+    el('td', {}, statusChip(x.status)),
+    td(x.inicio ? formatDateTime(x.inicio) : '—', 'nowrap'),
+    td(x.conclusao ? formatDateTime(x.conclusao) : '—', 'nowrap'),
+    td(String(x.days), 'num'), td(String(x.sessions), 'num'),
+    ...(paused ? [td(fmt(x.pausedMs), 'num')] : []),
+    td(fmt(x.effectiveMs), 'num'),
   ]));
-  const foot = [td('Total'), td(''), td(''), td(''), td(''), td('', 'num'), td('', 'num'), td(fmt(totalMs), 'num')];
-  const head = [th('Card'), th('Lista'), th('Status'), th('Início'), th('Conclusão'), th('Dias', 'num'), th('Sessões', 'num'), th('Tempo', 'num')];
+  const foot = [td('Total'), td(''), td(''), td(''), td(''), td('', 'num'), td('', 'num'),
+    ...(paused ? [td(fmt(totalPaused), 'num')] : []), td(fmt(totalMs), 'num')];
+  const head = [th('Card'), th('Lista'), th('Status'), th('Início'), th('Conclusão'),
+    th('Dias', 'num'), th('Sessões', 'num'), ...(paused ? [th('Pausado', 'num')] : []), th('Tempo', 'num')];
   return el('div', { class: 'tt-scroll' }, tableEl(head, body, foot));
 }
 
-function renderSessoes() {
-  const rows = MODEL.report.sessions;
-  if (rows.length === 0) return el('div', { class: 'tt-report-empty', text: 'Nenhuma sessão registrada ainda.' });
+function renderSessoes(r) {
+  const paused = showPaused();
+  const rows = r.sessions;
+  if (rows.length === 0) return el('div', { class: 'tt-report-empty', text: 'Nenhuma sessão para este filtro.' });
   const body = rows.map((s) => el('tr', {}, [
     td(s.card, 'tt-td-card'),
     td(formatDateTime(s.startedAt), 'nowrap'),
     td(s.endedAt ? formatDateTime(s.endedAt) : '(em aberto)', 'nowrap'),
-    td(String(s.days), 'num'), td(fmt(s.effectiveMs), 'num'),
+    td(String(s.days), 'num'),
+    ...(paused ? [td(fmt(s.pausedMs), 'num')] : []),
+    td(fmt(s.effectiveMs), 'num'),
   ]));
-  const head = [th('Card'), th('Início'), th('Fim'), th('Dias', 'num'), th('Tempo', 'num')];
+  const head = [th('Card'), th('Início'), th('Fim'), th('Dias', 'num'),
+    ...(paused ? [th('Pausado', 'num')] : []), th('Tempo', 'num')];
   return el('div', { class: 'tt-scroll' }, tableEl(head, body));
 }
 
 function renderPeriods(periods, periodWord) {
-  if (periods.length === 0) return el('div', { class: 'tt-report-empty', text: `Nenhum registro ${periodWord} ainda.` });
+  const paused = showPaused();
+  if (periods.length === 0) return el('div', { class: 'tt-report-empty', text: `Nenhum registro ${periodWord} para este filtro.` });
   const wrap = el('div', { class: 'tt-scroll' });
   for (const p of periods) {
-    const head = [th('Card'), th('Dias', 'num'), th('Sessões', 'num'), th('Tempo', 'num')];
-    const body = p.rows.map((r) => el('tr', {}, [
-      td(r.card, 'tt-td-card'), td(String(r.days), 'num'), td(String(r.sessions), 'num'), td(fmt(r.effectiveMs), 'num'),
+    const head = [th('Card'), th('Dias', 'num'), th('Sessões', 'num'),
+      ...(paused ? [th('Pausado', 'num')] : []), th('Tempo', 'num')];
+    const body = p.rows.map((row) => el('tr', {}, [
+      td(row.card, 'tt-td-card'), td(String(row.days), 'num'), td(String(row.sessions), 'num'),
+      ...(paused ? [td(fmt(row.pausedMs), 'num')] : []), td(fmt(row.effectiveMs), 'num'),
     ]));
-    const foot = [td('Total do período'), td(String(p.totalDays), 'num'), td(String(p.totalSessions), 'num'), td(fmt(p.totalMs), 'num')];
+    const foot = [td('Total do período'), td(String(p.totalDays), 'num'), td(String(p.totalSessions), 'num'),
+      ...(paused ? [td(fmt(p.totalPausedMs), 'num')] : []), td(fmt(p.totalMs), 'num')];
     wrap.appendChild(el('div', { class: 'tt-period' }, [
       el('div', { class: 'tt-period-head' }, [
         el('span', { class: 'tt-period-title', text: p.label }),
@@ -173,30 +217,42 @@ function renderPeriods(periods, periodWord) {
   return wrap;
 }
 
-function renderBody() {
+function renderBody(r) {
   switch (activeTab) {
-    case 'semanal': return renderPeriods(MODEL.report.weekly, 'semanal');
-    case 'mensal': return renderPeriods(MODEL.report.monthly, 'mensal');
-    case 'sessoes': return renderSessoes();
+    case 'semanal': return renderPeriods(r.weekly, 'semanal');
+    case 'mensal': return renderPeriods(r.monthly, 'mensal');
+    case 'sessoes': return renderSessoes(r);
     case 'geral':
-    default: return renderGeral();
+    default: return renderGeral(r);
   }
 }
 
 function render() {
   const root = document.getElementById('app');
   clear(root);
-  const { totals } = MODEL.report;
+  const r = getReport();
 
-  // --- barra: resumo + ações ---
+  // --- barra: resumo + filtro de membro + ações ---
   const summary = el('div', {
     class: 'tt-report-summary',
-    text: `${totals.trackedCount} card(s) com tempo · ${totals.visibleCount} visível(is) · total ${fmt(totals.totalMs)}`,
+    text: `${r.totals.trackedCount} card(s) com tempo · ${r.totals.visibleCount} no filtro · total ${fmt(r.totals.totalMs)}`,
   });
+
+  const memberSelect = el('select', { class: 'tt-select' });
+  memberSelect.appendChild(el('option', { value: '', text: 'Todos os membros' }));
+  for (const m of MODEL.members) {
+    const opt = el('option', { value: m.id, text: m.name });
+    if (m.id === selectedMemberId) opt.selected = true;
+    memberSelect.appendChild(opt);
+  }
+  memberSelect.value = selectedMemberId;
+  memberSelect.addEventListener('change', () => { selectedMemberId = memberSelect.value; render(); });
+
   const btnCsv = el('button', {
     class: 'tt-btn is-primary', text: 'Baixar CSV',
     onclick: async () => {
-      const name = `relatorio-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
+      const who = selectedMemberId ? '-' + (MODEL.members.find((m) => m.id === selectedMemberId) || {}).id : '';
+      const name = `relatorio-${activeTab}${who}-${new Date().toISOString().slice(0, 10)}.csv`;
       if (downloadCsv(name, csvForTab())) return;
       const ok = await copyText(csvForTab());
       flash(btnCsv, ok ? 'Copiado! (cole na planilha)' : 'Use "Copiar"', 2200);
@@ -206,19 +262,19 @@ function render() {
     class: 'tt-btn', text: 'Copiar',
     onclick: async () => { const ok = await copyText(csvForTab()); flash(btnCopy, ok ? 'Copiado!' : 'Falhou'); },
   });
+
   const toolbar = el('div', { class: 'tt-report-toolbar' }, [
-    summary,
+    el('div', { class: 'tt-report-meta' }, [summary, memberSelect]),
     el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv]),
   ]);
   root.appendChild(toolbar);
 
   // --- abas ---
-  const tabBar = el('div', { class: 'tt-tabs' }, TABS.map((tab) => el('button', {
+  root.appendChild(el('div', { class: 'tt-tabs' }, TABS.map((tab) => el('button', {
     class: `tt-tab${tab.id === activeTab ? ' is-active' : ''}`,
     text: tab.label,
     onclick: () => { activeTab = tab.id; render(); },
-  })));
-  root.appendChild(tabBar);
+  }))));
 
   // --- toggle "incluir cards sem tempo" (só na Geral) ---
   if (activeTab === 'geral') {
@@ -228,8 +284,7 @@ function render() {
     root.appendChild(el('label', { class: 'tt-check tt-report-toggle' }, [chk, ' Incluir cards sem tempo']));
   }
 
-  // --- conteúdo da aba ---
-  root.appendChild(renderBody());
+  root.appendChild(renderBody(r));
   t.sizeTo('#app').catch(() => {});
 }
 
@@ -240,19 +295,34 @@ async function boot() {
   try {
     const config = await getConfig(t);
     const [cards, lists] = await Promise.all([
-      t.cards('id', 'name', 'idList'),
+      t.cards('id', 'name', 'idList', 'members'),
       t.lists('id', 'name'),
     ]);
     const listName = new Map(lists.map((l) => [l.id, l.name]));
     const states = await Promise.all(
       cards.map((c) => t.get(c.id, 'shared', 'tt').catch(() => null)),
     );
-    const withState = cards.map((c, i) => ({
-      name: c.name,
-      lista: listName.get(c.idList) || '—',
-      state: normalize(states[i] || null),
-    }));
-    MODEL = { report: buildReport(withState, now(), config), config };
+
+    // membros: união dos atribuídos aos cards (id -> nome)
+    const memberName = new Map();
+    const allCards = cards.map((c, i) => {
+      const members = Array.isArray(c.members) ? c.members : [];
+      const memberIds = new Set();
+      for (const m of members) {
+        memberIds.add(m.id);
+        if (!memberName.has(m.id)) memberName.set(m.id, m.fullName || m.username || m.id);
+      }
+      return {
+        name: c.name,
+        lista: listName.get(c.idList) || '—',
+        state: normalize(states[i] || null),
+        memberIds,
+      };
+    });
+    const members = Array.from(memberName, ([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+    MODEL = { allCards, members, config, at: now() };
     render();
   } catch (e) {
     clear(root);
