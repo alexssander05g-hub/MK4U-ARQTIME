@@ -20,12 +20,15 @@
  */
 
 import { getConfig, reconcileAndPersist, getState, apply } from './services/storage.js';
-import { computeTotals, start, pause, resume, finish, Status } from './services/tracker.js';
-import { formatDuration, now } from './utils/time.js';
+import { start, pause, resume, finish, Status } from './services/tracker.js';
+import { cardActiveDays } from './services/report.js';
+import { now } from './utils/time.js';
 
 const ICON = {
   clock: './public/icons/clock.svg',
   clockLight: './public/icons/clock-light.svg',
+  calClock: './public/icons/calendar-clock.svg',
+  calClockLight: './public/icons/calendar-clock-light.svg',
   play: './public/icons/play.svg',
   pause: './public/icons/pause.svg',
   resume: './public/icons/resume.svg',
@@ -35,14 +38,14 @@ const ICON = {
 
 const BADGE_REFRESH = 15; // segundos (mínimo do Trello é 10; usamos 15)
 
-/** Monta o texto/cor do badge a partir do estado + totais. */
+/** Monta o texto/cor do badge da FRENTE do card: DIAS ÚTEIS ATIVOS + status. */
 function badgeFor(state, config) {
-  const totals = computeTotals(state, now(), config);
-  const time = formatDuration(totals.effectiveMs, config.timeFormat);
+  const days = cardActiveDays(state, now(), config);
+  const d = `${days}d`;
   switch (state.status) {
-    case Status.RUNNING: return { text: `🕐 ${time}`, color: 'blue' };
-    case Status.PAUSED:  return { text: `⏸ ${time}`, color: 'yellow' };
-    case Status.DONE:    return { text: `✓ ${time}`, color: 'green' };
+    case Status.RUNNING: return { text: `▶ ${d}`, color: 'blue' };
+    case Status.PAUSED:  return { text: `⏸ ${d}`, color: 'yellow' };
+    case Status.DONE:    return { text: `✓ ${d}`, color: 'green' };
     default:             return null; // 'idle' -> sem badge na frente (quadro limpo)
   }
 }
@@ -73,7 +76,7 @@ window.TrelloPowerUp.initialize({
   'card-detail-badges': function (t) {
     return getConfig(t).then((config) =>
       reconcileAndPersist(t, config).then((state) => {
-        const totals = computeTotals(state, now(), config);
+        const days = cardActiveDays(state, now(), config);
         const map = {
           idle:    { title: 'Controle de Tempo', text: 'Aguardando', color: 'light-gray' },
           running: { title: 'Controle de Tempo', text: 'Em andamento', color: 'blue' },
@@ -83,7 +86,7 @@ window.TrelloPowerUp.initialize({
         const status = map[state.status] || map.idle;
         return [
           status,
-          { title: 'Tempo', text: formatDuration(totals.effectiveMs, config.timeFormat), color: null },
+          { title: 'Dias úteis', text: `${days} ${days === 1 ? 'dia' : 'dias'}`, color: null },
         ];
       })
     );
@@ -122,7 +125,7 @@ window.TrelloPowerUp.initialize({
   'board-buttons': function () {
     return [{
       // dark = ícone para cabeçalho escuro (branco); light = para claro (cinza).
-      icon: { dark: ICON.clockLight, light: ICON.clock },
+      icon: { dark: ICON.calClockLight, light: ICON.calClock },
       text: 'Relatório de Tempo',
       callback: (tt) => tt.modal({
         title: 'Relatório de Tempo',
