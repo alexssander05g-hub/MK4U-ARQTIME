@@ -136,12 +136,13 @@ export function buildReport(cards, at, config) {
   const weekMap = new Map();
   const monthMap = new Map();
 
-  const addTo = (map, key, label, ts, card, effMs, dayKeys) => {
+  const addTo = (map, key, label, ts, card, effMs, pausedMs, dayKeys) => {
     let period = map.get(key);
     if (!period) { period = { key, label, ts, cards: new Map(), dayKeys: new Set() }; map.set(key, period); }
     let agg = period.cards.get(card);
-    if (!agg) { agg = { card, effectiveMs: 0, sessions: 0, dayKeys: new Set() }; period.cards.set(card, agg); }
+    if (!agg) { agg = { card, effectiveMs: 0, pausedMs: 0, sessions: 0, dayKeys: new Set() }; period.cards.set(card, agg); }
     agg.effectiveMs += effMs;
+    agg.pausedMs += pausedMs;
     agg.sessions += 1;
     for (const k of dayKeys) { agg.dayKeys.add(k); period.dayKeys.add(k); }
   };
@@ -159,7 +160,8 @@ export function buildReport(cards, at, config) {
     general.push({
       card: c.name, lista: c.lista, status: st.status,
       inicio: totals.firstStart, conclusao: totals.lastEnd,
-      effectiveMs: totals.effectiveMs, sessions: totals.sessionsCount, days, tracked,
+      effectiveMs: totals.effectiveMs, pausedMs: totals.pausedMs,
+      sessions: totals.sessionsCount, days, tracked,
     });
 
     // sessões concluídas + a aberta (se houver)
@@ -169,14 +171,17 @@ export function buildReport(cards, at, config) {
     for (const { s, open } of items) {
       const endRef = open ? at : s.endedAt;
       const effMs = sessionEffectiveMs(open ? st.session : s, at, config);
+      const pausedMs = open
+        ? ((st.session.pausedMs || 0) + (st.session.pauseStartedAt ? at - st.session.pauseStartedAt : 0))
+        : (s.pausedMs || 0);
       const dayKeys = businessDayKeys(s.startedAt, endRef, bd);
       sessionRows.push({
         card: c.name, startedAt: s.startedAt, endedAt: open ? null : s.endedAt,
-        effectiveMs: effMs, days: dayKeys.length, open,
+        effectiveMs: effMs, pausedMs, days: dayKeys.length, open,
       });
-      addTo(weekMap, isoWeekKey(s.startedAt), weekLabel(s.startedAt), mondayOf(s.startedAt).getTime(), c.name, effMs, dayKeys);
+      addTo(weekMap, isoWeekKey(s.startedAt), weekLabel(s.startedAt), mondayOf(s.startedAt).getTime(), c.name, effMs, pausedMs, dayKeys);
       const md = new Date(s.startedAt);
-      addTo(monthMap, monthKey(s.startedAt), monthLabel(s.startedAt), new Date(md.getFullYear(), md.getMonth(), 1).getTime(), c.name, effMs, dayKeys);
+      addTo(monthMap, monthKey(s.startedAt), monthLabel(s.startedAt), new Date(md.getFullYear(), md.getMonth(), 1).getTime(), c.name, effMs, pausedMs, dayKeys);
     }
   }
 
@@ -184,11 +189,12 @@ export function buildReport(cards, at, config) {
     .sort((a, b) => b.ts - a.ts) // período mais recente primeiro
     .map((p) => {
       const rows = Array.from(p.cards.values())
-        .map((a) => ({ card: a.card, effectiveMs: a.effectiveMs, sessions: a.sessions, days: a.dayKeys.size }))
+        .map((a) => ({ card: a.card, effectiveMs: a.effectiveMs, pausedMs: a.pausedMs, sessions: a.sessions, days: a.dayKeys.size }))
         .sort((x, y) => (y.effectiveMs - x.effectiveMs) || x.card.localeCompare(y.card, 'pt-BR'));
       return {
         key: p.key, label: p.label, rows,
         totalMs: rows.reduce((s, r) => s + r.effectiveMs, 0),
+        totalPausedMs: rows.reduce((s, r) => s + r.pausedMs, 0),
         totalSessions: rows.reduce((s, r) => s + r.sessions, 0),
         totalDays: p.dayKeys.size,
       };
