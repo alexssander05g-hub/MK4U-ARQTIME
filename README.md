@@ -48,11 +48,17 @@ semana ISO começando na segunda; você não informa datas), e **Por sessão**
 (cada sessão com seu tempo e dias). Cada aba tem **exportação para CSV**
 (abre no Excel/Google Sheets).
 
-No topo do relatório há um **seletor de membro**: escolhendo uma pessoa, todas
-as abas (e o CSV) passam a mostrar só os cards em que ela está **atribuída** (os
-avatares do card). É filtro por atribuição — o cronômetro do card é único e
+No topo do relatório há **filtros** (por **membro** atribuído e por **etiqueta**)
+e uma **busca** por nome de card; clicar nos cabeçalhos da aba Geral **ordena**.
+A aba **Painel** mostra gráficos de barras (top cards, por semana, por mês, por
+membro). Dá para exportar o **CSV da aba** ou **Baixar tudo** (todas as abas num
+arquivo só). Filtro por atribuição — o cronômetro do card é único e
 compartilhado, não "tempo por pessoa". Quando a configuração conta pausas, o
 relatório traz também a coluna **Pausado**, além do tempo efetivo — como no card.
+
+No verso do card, cada **sessão pode ser corrigida manualmente** (✎): ajusta-se
+início/fim (ou só o início, na sessão em aberto), com marca "Corrigido
+manualmente" no histórico. Útil quando alguém esquece o cronômetro rodando.
 
 Sobre o que aparece **onde**:
 - **Na frente do card:** os **dias úteis ativos** (ex.: `▶ 3d`), com a cor do
