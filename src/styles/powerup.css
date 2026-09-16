@@ -127,3 +127,71 @@ body {
 .tt-days { display: flex; flex-wrap: wrap; gap: 10px; }
 .tt-days label { display: flex; align-items: center; gap: 4px; font-size: 13px; }
 .tt-save { align-self: flex-start; margin-top: 4px; }
+
+/* --- relatório consolidado (modal do botão de quadro) --- */
+.tt-report { padding: 10px 14px 16px; }
+.tt-report-toolbar {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.tt-report-meta { display: flex; flex-direction: column; gap: 6px; }
+.tt-report-summary { color: var(--tt-subtle); font-size: 13px; }
+.tt-report-toggle { font-size: 13px; color: var(--tt-text); }
+.tt-report-actions { display: flex; gap: 6px; }
+.tt-report-empty { color: var(--tt-subtle); padding: 24px 8px; text-align: center; line-height: 1.5; }
+
+.tt-scroll {
+  max-height: 60vh; overflow: auto;
+  border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
+}
+table.tt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.tt-table th, table.tt-table td {
+  text-align: left; padding: 7px 10px;
+  border-bottom: 1px solid var(--tt-border); vertical-align: top;
+}
+table.tt-table th {
+  color: var(--tt-subtle); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.4px;
+  position: sticky; top: 0; background: var(--tt-bg); z-index: 1;
+}
+table.tt-table td.num, table.tt-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.tt-table td.nowrap { white-space: nowrap; }
+table.tt-table td.tt-td-card { font-weight: 500; max-width: 280px; }
+table.tt-table tbody tr:hover { background: var(--tt-bg-soft); }
+table.tt-table tfoot td {
+  font-weight: 600; border-top: 2px solid var(--tt-border); border-bottom: none;
+  position: sticky; bottom: 0; background: var(--tt-bg);
+}
+
+.tt-badge-mini {
+  display: inline-block; padding: 1px 7px; border-radius: 9px;
+  font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap;
+}
+.tt-badge-mini.st-running { background: var(--tt-blue); }
+.tt-badge-mini.st-paused  { background: var(--tt-yellow); }
+.tt-badge-mini.st-done    { background: var(--tt-green); }
+.tt-badge-mini.st-idle    { background: var(--tt-subtle); }
+
+/* --- abas do relatório --- */
+.tt-tabs {
+  display: flex; gap: 2px; margin: 4px 0 12px;
+  border-bottom: 1px solid var(--tt-border); flex-wrap: wrap;
+}
+.tt-tab {
+  border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--tt-subtle);
+  padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tt-tab:hover { color: var(--tt-text); }
+.tt-tab.is-active { color: var(--tt-blue); border-bottom-color: var(--tt-blue); }
+
+/* --- blocos de período (semanal / mensal) --- */
+.tt-period { margin-bottom: 16px; }
+.tt-period:last-child { margin-bottom: 0; }
+.tt-period-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 6px 2px; position: sticky; top: 0; background: var(--tt-bg); z-index: 2;
+}
+.tt-period-title { font-weight: 600; font-size: 13px; color: var(--tt-text); }
+.tt-period-sum { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--tt-blue); }
+.tt-period .tt-table { margin-bottom: 4px; }
