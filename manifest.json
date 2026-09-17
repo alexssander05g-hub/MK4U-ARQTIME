@@ -3,7 +3,7 @@
   "details": "Cronometra automaticamente quanto tempo cada card leva, com início/conclusão, pausas, histórico e sessões — baseado em timestamps.",
   "author": "Alexssander",
   "icon": {
-    "url": "./public/icons/icon.svg"
+    "url": "./public/icons/icon.png"
   },
   "capabilities": [
     "card-badges",
