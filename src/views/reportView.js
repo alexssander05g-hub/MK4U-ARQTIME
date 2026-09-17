@@ -14,7 +14,7 @@
 
 import { getConfig } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
-import { buildReport, timeByMember } from '../services/report.js';
+import { buildReport, timeByMember, creationMsFromId } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
 import { el, clear } from '../utils/dom.js';
@@ -60,7 +60,7 @@ function getReport() {
   const key = `${selectedMemberId}|${selectedLabelId}`;
   if (_cacheReport && _cacheKey === key) return _cacheReport;
   _cacheReport = buildReport(
-    filteredCards().map((c) => ({ name: c.name, lista: c.lista, state: c.state })),
+    filteredCards().map((c) => ({ name: c.name, lista: c.lista, state: c.state, createdAt: c.createdAt })),
     MODEL.at, MODEL.config,
   );
   _cacheKey = key;
@@ -560,7 +560,7 @@ async function boot() {
       const labelIds = new Set();
       for (const m of members) { memberIds.add(m.id); if (!memberName.has(m.id)) memberName.set(m.id, m.fullName || m.username || m.id); }
       for (const l of labels) { labelIds.add(l.id); if (!labelName.has(l.id)) labelName.set(l.id, l.name || `(cor ${l.color || '—'})`); }
-      return { name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null), memberIds, labelIds };
+      return { name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null), memberIds, labelIds, createdAt: creationMsFromId(c.id) };
     });
     const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
     const members = Array.from(memberName, ([id, name]) => ({ id, name })).sort(byName);
