@@ -165,6 +165,57 @@ export function timeByMember(cards, at, config) {
   return Array.from(map.values()).sort((a, b) => b.effectiveMs - a.effectiveMs);
 }
 
+/**
+ * Cards CONCLUÍDOS por membro, por semana (base da aba "Bonificação").
+ * Um card conta quando está "Concluído"; é atribuído à SEMANA da sua data de
+ * conclusão e a CADA membro atribuído a ele (atribuição compartilhada, como no
+ * timeByMember). Cards concluídos sem membro não entram (como na planilha).
+ * @param {{name:string, memberIds:Iterable<string>, state:object}[]} cards
+ * @returns {{ weeks:{key:string,label:string}[], rows:{memberId:string, perWeek:Object, total:number}[] }}
+ */
+export function concludedByMember(cards, at, config, monthFilter) {
+  const monthsSet = new Set();
+  const weekKeys = new Map(); // key -> {key,label,ts}
+  const members = new Map();  // memberId -> {memberId, perWeek, total}
+  for (const c of cards) {
+    if (!c.state || c.state.status !== Status.DONE) continue;
+    const end = computeTotals(c.state, at, config).lastEnd;
+    if (end == null) continue;
+    monthsSet.add(monthKey(end));
+    if (monthFilter && monthKey(end) !== monthFilter) continue; // escopo do mês
+    const wk = isoWeekKey(end);
+    if (!weekKeys.has(wk)) weekKeys.set(wk, { key: wk, label: weekLabel(end), ts: mondayOf(end).getTime() });
+    for (const id of c.memberIds) {
+      let m = members.get(id);
+      if (!m) { m = { memberId: id, perWeek: {}, total: 0 }; members.set(id, m); }
+      m.perWeek[wk] = (m.perWeek[wk] || 0) + 1;
+      m.total += 1;
+    }
+  }
+  const weeks = Array.from(weekKeys.values()).sort((a, b) => a.ts - b.ts).map(({ key, label }) => ({ key, label }));
+  const rows = Array.from(members.values()).sort((a, b) => b.total - a.total);
+  const months = Array.from(monthsSet).sort().reverse(); // mais recente primeiro
+  return { weeks, rows, months };
+}
+
+/**
+ * Bonificação (R$) de uma pessoa, a partir do total entregue no mês e da meta.
+ * Regra: entregue < mín → 0; mín ≤ entregue < máx → bonusMin; entregue ≥ máx → bonusMax.
+ * @param {number} entregue  cards concluídos no mês
+ * @param {{min:number,max:number,bonusMin:number,bonusMax:number}} meta
+ * @returns {number|null} valor em R$, ou null se a meta não estiver configurada
+ */
+export function bonusFor(entregue, meta) {
+  if (!meta || meta.min == null || meta.min === '') return null;
+  const min = Number(meta.min);
+  const max = meta.max == null || meta.max === '' ? min : Number(meta.max);
+  const bMin = Number(meta.bonusMin || 0);
+  const bMax = Number(meta.bonusMax || 0);
+  if (entregue >= max) return bMax;
+  if (entregue >= min) return bMin;
+  return 0;
+}
+
 // -- construção do relatório -----------------------------------------------
 
 /**
