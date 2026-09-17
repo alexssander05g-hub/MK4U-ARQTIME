@@ -69,6 +69,32 @@ export function cardActiveDays(state, at, config) {
   return set.size;
 }
 
+/**
+ * Data de CRIAÇÃO de um card, derivada do próprio ID do Trello.
+ * Os 8 primeiros dígitos hex do ID são o timestamp Unix (segundos) da criação.
+ * 100% client-side — não precisa de API nem token. Retorna ms, ou null.
+ */
+export function creationMsFromId(id) {
+  if (typeof id !== 'string' || id.length < 8) return null;
+  const secs = parseInt(id.slice(0, 8), 16);
+  return Number.isFinite(secs) ? secs * 1000 : null;
+}
+
+/**
+ * Dias úteis do card contados DESDE A CRIAÇÃO dele (sem contar fins de semana),
+ * até agora — ou até a conclusão, quando o card está "Concluído" (a contagem
+ * congela ao ir para a lista de fim). Se por algum motivo não der para derivar
+ * a criação, cai para o primeiro início registrado.
+ */
+export function cardDays(createdAtMs, state, at, config) {
+  const bd = (config && config.business && config.business.days) || DEFAULT_DAYS;
+  const totals = computeTotals(state, at, config);
+  const startMs = createdAtMs != null ? createdAtMs : totals.firstStart;
+  if (startMs == null) return 0;
+  const end = state.status === Status.DONE ? (totals.lastEnd || at) : at;
+  return businessDayKeys(startMs, end, bd).length;
+}
+
 /** Segunda-feira (00:00 local) da semana que contém `ms`. */
 function mondayOf(ms) {
   const d = new Date(ms);
@@ -175,7 +201,7 @@ export function buildReport(cards, at, config) {
   for (const c of cards) {
     const st = c.state;
     const totals = computeTotals(st, at, config);
-    const days = cardActiveDays(st, at, config);
+    const days = cardDays(c.createdAt, st, at, config);
     const tracked = st.status !== Status.IDLE;
     if (tracked) { trackedCount += 1; totalMs += totals.effectiveMs; }
 
