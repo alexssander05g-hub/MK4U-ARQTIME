@@ -96,7 +96,7 @@ window.TrelloPowerUp.initialize({
   'card-back-section': function (t) {
     return {
       title: 'Controle de Tempo',
-      icon: ICON.clock,
+      icon: t.signUrl(ICON.clock),
       content: { type: 'iframe', url: t.signUrl('./views/section.html'), height: 260 },
     };
   },
@@ -106,15 +106,15 @@ window.TrelloPowerUp.initialize({
     return getState(t).then((state) => {
       const btns = [];
       if (state.status === Status.IDLE || state.status === Status.DONE) {
-        btns.push({ icon: ICON.play, text: 'Iniciar', callback: (tt) => apply(tt, start) });
+        btns.push({ icon: t.signUrl(ICON.play), text: 'Iniciar', callback: (tt) => apply(tt, start) });
       }
       if (state.status === Status.RUNNING) {
-        btns.push({ icon: ICON.pause, text: 'Pausar', callback: (tt) => apply(tt, pause) });
-        btns.push({ icon: ICON.stop, text: 'Finalizar', callback: (tt) => apply(tt, finish) });
+        btns.push({ icon: t.signUrl(ICON.pause), text: 'Pausar', callback: (tt) => apply(tt, pause) });
+        btns.push({ icon: t.signUrl(ICON.stop), text: 'Finalizar', callback: (tt) => apply(tt, finish) });
       }
       if (state.status === Status.PAUSED) {
-        btns.push({ icon: ICON.resume, text: 'Retomar', callback: (tt) => apply(tt, resume) });
-        btns.push({ icon: ICON.stop, text: 'Finalizar', callback: (tt) => apply(tt, finish) });
+        btns.push({ icon: t.signUrl(ICON.resume), text: 'Retomar', callback: (tt) => apply(tt, resume) });
+        btns.push({ icon: t.signUrl(ICON.stop), text: 'Finalizar', callback: (tt) => apply(tt, finish) });
       }
       return btns;
     });
@@ -122,16 +122,16 @@ window.TrelloPowerUp.initialize({
 
   // ---- Botão do quadro: Relatório de Tempo -----------------------------
   // Abre um modal com a tabela consolidada de todos os cards + exportação CSV.
-  'board-buttons': function () {
+  'board-buttons': function (t) {
     return [{
+      // URLs assinadas (absolutas) — ícone relativo aparecia quebrado no cabeçalho.
       // dark = ícone para cabeçalho escuro (branco); light = para claro (cinza).
-      icon: { dark: ICON.calClockLight, light: ICON.calClock },
+      icon: { dark: t.signUrl(ICON.calClockLight), light: t.signUrl(ICON.calClock) },
       text: 'Relatório de Tempo',
       callback: (tt) => tt.modal({
         title: 'Relatório de Tempo',
         url: tt.signUrl('./views/report.html'),
-        fullscreen: false,
-        height: 600,
+        fullscreen: true, // janela grande (tela cheia) para o relatório
       }),
     }];
   },
