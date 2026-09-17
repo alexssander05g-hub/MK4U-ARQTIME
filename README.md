@@ -50,7 +50,7 @@ semana ISO começando na segunda; você não informa datas), e **Por sessão**
 
 No topo do relatório há **filtros** (por **membro** atribuído e por **etiqueta**)
 e uma **busca** por nome de card; clicar nos cabeçalhos da aba Geral **ordena**.
-A aba **Painel** mostra gráficos de barras (top cards, por semana, por mês, por
+A aba **Bonificação** conta os **cards concluídos por membro, por semana** (com seletor de mês), permite configurar **metas por pessoa** (mín/máx mensal e valores de bônus) e calcula a **bonificação em R$** automaticamente (< mín → R$0; entre mín e máx → bônus mín; ≥ máx → bônus máx; meta semanal = mín ÷ 4). Entra no CSV e no PDF. A aba **Painel** mostra gráficos de barras (top cards, por semana, por mês, por
 membro). Dá para exportar o **CSV da aba**, **Baixar tudo** (todas as abas num
 arquivo só) ou o **Relatório (HTML)** — uma página autocontida com tabelas e
 gráficos, que abre no navegador e vira **PDF** por Imprimir → "Salvar como PDF". Filtro por atribuição — o cronômetro do card é único e
