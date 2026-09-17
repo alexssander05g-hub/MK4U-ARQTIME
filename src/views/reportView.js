@@ -137,13 +137,24 @@ function csvAll() {
   ].join('\r\n\r\n');
 }
 
-function downloadCsv(filename, text) {
+function downloadBlob(filename, text, mime, bom) {
   try {
-    const blob = new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([(bom ? '\uFEFF' : '') + text], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = el('a', { href: url, download: filename });
     document.body.appendChild(a); a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 0);
+    return true;
+  } catch (e) { return false; }
+}
+function downloadCsv(filename, text) { return downloadBlob(filename, text, 'text/csv;charset=utf-8;', true); }
+
+/** Fallback quando o download é bloqueado no iframe: abre o HTML em nova aba. */
+function openInTab(html) {
+  try {
+    const w = window.open('', '_blank');
+    if (!w) return false;
+    w.document.open(); w.document.write(html); w.document.close();
     return true;
   } catch (e) { return false; }
 }
@@ -165,7 +176,134 @@ function flash(btn, msg, ms = 1600) {
   setTimeout(() => { btn.textContent = original; }, ms);
 }
 
-// -- helpers de tabela / gráfico -------------------------------------------
+// -- relatório HTML autocontido (tabelas + gráficos; vira PDF via imprimir) --
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function barsHtml(title, items) {
+  if (!items.length) return `<section class="chart"><h3>${esc(title)}</h3><p class="muted">Sem dados.</p></section>`;
+  const max = items.reduce((m, i) => Math.max(m, i.value), 0) || 1;
+  const rows = items.map((i) => (
+    `<div class="bar"><span class="bl">${esc(i.label)}</span>`
+    + `<span class="bt"><span class="bf" style="width:${Math.max(2, (i.value / max) * 100).toFixed(1)}%"></span></span>`
+    + `<span class="bv">${esc(i.text)}</span></div>`
+  )).join('');
+  return `<section class="chart"><h3>${esc(title)}</h3>${rows}</section>`;
+}
+
+function tableHtml(headArr, rowArrs, footArr) {
+  const head = `<tr>${headArr.map((h) => `<th>${esc(h)}</th>`).join('')}</tr>`;
+  const body = rowArrs.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+  const foot = footArr ? `<tfoot><tr>${footArr.map((c) => `<td>${esc(c)}</td>`).join('')}</tr></tfoot>` : '';
+  return `<table><thead>${head}</thead><tbody>${body}</tbody>${foot}</table>`;
+}
+
+function buildHtmlReport() {
+  const r = getReport();
+  const paused = showPaused();
+  const now_ = new Date();
+
+  // filtros ativos (texto)
+  const filterBits = [];
+  if (selectedMemberId) filterBits.push('Membro: ' + (MODEL.memberName.get(selectedMemberId) || selectedMemberId));
+  if (selectedLabelId) {
+    const lbl = MODEL.labels.find((l) => l.id === selectedLabelId);
+    filterBits.push('Etiqueta: ' + (lbl ? lbl.name : selectedLabelId));
+  }
+  const filterLine = filterBits.length ? filterBits.join(' · ') : 'Todos os cards';
+
+  // gráficos
+  const top = r.general.filter((x) => x.tracked).slice(0, 10)
+    .map((x) => ({ label: x.card, value: x.effectiveMs, text: fmt(x.effectiveMs) }));
+  const weeks = r.weekly.slice().reverse().map((p) => ({ label: p.label.split(' · ')[0], value: p.totalMs, text: fmt(p.totalMs) }));
+  const months = r.monthly.slice().reverse().map((p) => ({ label: p.label, value: p.totalMs, text: fmt(p.totalMs) }));
+  const byMember = timeByMember(filteredCards(), MODEL.at, MODEL.config)
+    .map((m) => ({ label: MODEL.memberName.get(m.memberId) || m.memberId, value: m.effectiveMs, text: fmt(m.effectiveMs) }));
+
+  const charts = [
+    barsHtml('Top cards por tempo', top),
+    barsHtml('Tempo por semana', weeks),
+    barsHtml('Tempo por mês', months),
+    MODEL.members.length ? barsHtml('Tempo por membro', byMember) : '',
+  ].join('');
+
+  // tabela Geral
+  const gHead = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
+  const gRows = r.general.filter((x) => x.tracked).map((x) => [
+    x.card, x.lista, STATUS_LABEL[x.status],
+    x.inicio ? formatDateTime(x.inicio) : '—', x.conclusao ? formatDateTime(x.conclusao) : '—',
+    x.days, x.sessions, ...(paused ? [fmt(x.pausedMs)] : []), fmt(x.effectiveMs),
+  ]);
+  const gTotal = r.general.filter((x) => x.tracked).reduce((a, x) => a + x.effectiveMs, 0);
+  const gFoot = ['Total', '', '', '', '', '', '', ...(paused ? [''] : []), fmt(gTotal)];
+
+  // períodos
+  const periodTables = (periods, word) => (periods.length
+    ? periods.map((p) => {
+      const head = ['Card', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
+      const rows = p.rows.map((row) => [row.card, row.days, row.sessions, ...(paused ? [fmt(row.pausedMs)] : []), fmt(row.effectiveMs)]);
+      const foot = ['Total do período', p.totalDays, p.totalSessions, ...(paused ? [fmt(p.totalPausedMs)] : []), fmt(p.totalMs)];
+      return `<h3>${esc(p.label)}</h3>${tableHtml(head, rows, foot)}`;
+    }).join('')
+    : `<p class="muted">Nenhum registro ${word}.</p>`);
+
+  // Por sessão
+  const sHead = ['Card', 'Início', 'Fim', 'Dias', ...(paused ? ['Pausado'] : []), 'Tempo'];
+  const sRows = r.sessions.map((s) => [
+    s.card, formatDateTime(s.startedAt), s.endedAt ? formatDateTime(s.endedAt) : '(em aberto)',
+    s.days, ...(paused ? [fmt(s.pausedMs)] : []), fmt(s.effectiveMs),
+  ]);
+
+  // Por membro
+  const mRows = byMember.map((m) => [m.label, m.text]);
+
+  const style = `
+    :root{color-scheme:light}
+    *{box-sizing:border-box}
+    body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#172b4d;margin:0;padding:24px;max-width:900px;margin:0 auto;background:#fff}
+    h1{font-size:20px;margin:0 0 4px}
+    h2{font-size:15px;margin:26px 0 8px;border-bottom:2px solid #dfe1e6;padding-bottom:4px}
+    h3{font-size:13px;margin:16px 0 6px;color:#42526e}
+    .meta{color:#6b778c;font-size:12px;line-height:1.6;margin-bottom:8px}
+    table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px}
+    th,td{border:1px solid #dfe1e6;padding:5px 8px;text-align:left}
+    th{background:#f4f5f7;color:#42526e;font-size:11px;text-transform:uppercase;letter-spacing:.3px}
+    tfoot td{font-weight:700;background:#fafbfc}
+    td:nth-child(n+6){text-align:right;font-variant-numeric:tabular-nums}
+    .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .chart h3{margin-top:0}
+    .bar{display:grid;grid-template-columns:38% 1fr auto;align-items:center;gap:8px;margin-bottom:5px}
+    .bl{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .bt{background:#f4f5f7;border-radius:6px;height:13px;overflow:hidden}
+    .bf{display:block;background:#0079bf;height:100%;border-radius:6px}
+    .bv{font-size:11px;color:#6b778c;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .muted{color:#6b778c;font-size:12px}
+    @media print{
+      body{padding:0}
+      h2{page-break-after:avoid}
+      table,.chart{page-break-inside:avoid}
+      .charts{grid-template-columns:1fr 1fr}
+    }`;
+
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">`
+    + `<title>Relatório de Tempo</title><style>${style}</style></head><body>`
+    + `<h1>Relatório de Tempo${MODEL.boardName ? ' — ' + esc(MODEL.boardName) : ''}</h1>`
+    + `<div class="meta">Gerado em ${esc(formatDateTime(now_.getTime()))} · Filtro: ${esc(filterLine)}<br>`
+    + `${r.totals.trackedCount} card(s) com tempo · ${r.totals.visibleCount} no filtro · Total do quadro: ${esc(fmt(r.totals.totalMs))}</div>`
+    + `<p class="muted">Dica: para gerar um PDF, use Imprimir (Ctrl+P) e escolha "Salvar como PDF".</p>`
+    + `<h2>Visão geral</h2><div class="charts">${charts}</div>`
+    + `<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`
+    + `<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`
+    + `<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`
+    + `<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`
+    + (MODEL.members.length ? `<h2>Por membro</h2>${tableHtml(['Membro', 'Tempo'], mRows)}` : '')
+    + `</body></html>`;
+}
+
+// -- exportação (fim) ------------------------------------------------------
 
 function th(text, cls) { return el('th', cls ? { class: cls, text } : { text }); }
 function td(text, cls) { return el('td', cls ? { class: cls, text } : { text }); }
@@ -355,6 +493,16 @@ function render() {
       flash(btnAll, ok ? 'Copiado!' : 'Falhou', 2200);
     },
   });
+  const btnHtml = el('button', {
+    class: 'tt-btn', text: 'Relatório (HTML)',
+    onclick: () => {
+      const html = buildHtmlReport();
+      const name = `relatorio-tempo-${new Date().toISOString().slice(0, 10)}.html`;
+      if (downloadBlob(name, html, 'text/html;charset=utf-8;', false)) return;
+      if (openInTab(html)) return;
+      flash(btnHtml, 'Bloqueado no navegador', 2200);
+    },
+  });
   const btnCopy = el('button', {
     class: 'tt-btn', text: 'Copiar',
     onclick: async () => { const ok = await copyText(csvForTab()); flash(btnCopy, ok ? 'Copiado!' : 'Falhou'); },
@@ -363,7 +511,7 @@ function render() {
   const filters = el('div', { class: 'tt-report-filters' }, [memberSel, labelSel, search].filter(Boolean));
   const toolbar = el('div', { class: 'tt-report-toolbar' }, [
     el('div', { class: 'tt-report-meta' }, [summary, filters]),
-    el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv, btnAll]),
+    el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv, btnAll, btnHtml]),
   ]);
   root.appendChild(toolbar);
 
@@ -395,7 +543,8 @@ async function boot() {
   const root = document.getElementById('app');
   try {
     const config = await getConfig(t);
-    const [cards, lists] = await Promise.all([
+    const [board, cards, lists] = await Promise.all([
+      t.board('id', 'name').catch(() => ({})),
       t.cards('id', 'name', 'idList', 'members', 'labels'),
       t.lists('id', 'name'),
     ]);
@@ -417,7 +566,7 @@ async function boot() {
     const members = Array.from(memberName, ([id, name]) => ({ id, name })).sort(byName);
     const labels = Array.from(labelName, ([id, name]) => ({ id, name })).sort(byName);
 
-    MODEL = { allCards, members, labels, memberName, config, at: now() };
+    MODEL = { allCards, members, labels, memberName, config, at: now(), boardName: board && board.name ? board.name : '' };
     render();
   } catch (e) {
     clear(root);
