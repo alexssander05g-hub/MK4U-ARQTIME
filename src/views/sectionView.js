@@ -20,10 +20,6 @@ import { el, mount } from '../utils/dom.js';
 
 const t = window.TrelloPowerUp.iframe();
 
-// Quando o painel é aberto no modal grande (botão Expandir), escondemos o
-// próprio botão Expandir e não chamamos sizeTo (o modal tem altura própria).
-const IN_MODAL = new URLSearchParams(window.location.search).get('modal') === '1';
-
 let config = null;
 let state = null;
 let createdAt = null; // data de criação do card (derivada do ID)
@@ -169,19 +165,6 @@ function render() {
   // BOTÕES
   container.appendChild(buttonsFor(state.status));
 
-  // EXPANDIR — abre o mesmo painel num modal grande e largo
-  if (!IN_MODAL) {
-    container.appendChild(el('button', {
-      class: 'tt-link-btn', text: '⤢ Expandir',
-      onclick: () => t.modal({
-        title: 'Controle de Tempo',
-        url: t.signUrl('./views/section.html', { modal: '1' }),
-        fullscreen: false,
-        height: 640,
-      }),
-    }));
-  }
-
   // CORRIGIR início da sessão em aberto
   if (state.session) {
     container.appendChild(el('button', {
@@ -233,7 +216,7 @@ function render() {
   }
 
   mount('app', container);
-  if (!IN_MODAL) t.sizeTo('#app').catch(() => {}); // no modal, deixa a altura própria
+  t.sizeTo('#app').catch(() => {});
 }
 
 /** Atualiza só os números que "correm", 1x por segundo. */
