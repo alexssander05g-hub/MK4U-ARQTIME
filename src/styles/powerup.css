@@ -143,6 +143,11 @@ body {
 }
 .tt-html-sections-label { color: var(--tt-subtle); font-weight: 600; }
 .tt-html-section { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
+.tt-meta-input {
+  width: 64px; font-family: inherit; font-size: 12px; text-align: right;
+  padding: 3px 5px; border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
+  background: var(--tt-bg); color: var(--tt-text);
+}
 .tt-select {
   font-family: inherit; font-size: 13px; color: var(--tt-text);
   padding: 5px 8px; border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
