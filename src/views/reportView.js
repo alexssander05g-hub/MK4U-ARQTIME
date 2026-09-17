@@ -12,9 +12,9 @@
  * tracker.js, então os números batem com o verso de cada card.
  */
 
-import { getConfig } from '../services/storage.js';
+import { getConfig, saveConfig } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
-import { buildReport, timeByMember, creationMsFromId } from '../services/report.js';
+import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
 import { el, clear } from '../utils/dom.js';
@@ -31,6 +31,7 @@ const TABS = [
   { id: 'semanal', label: 'Semanal' },
   { id: 'mensal', label: 'Mensal' },
   { id: 'sessoes', label: 'Por sessão' },
+  { id: 'bonificacao', label: 'Bonificação' },
 ];
 
 let MODEL = null;             // { allCards, members, labels, memberName, config, at }
@@ -39,6 +40,7 @@ let includeUntracked = true; // mostra cards em fila (sem tempo) por padrão, co
 let selectedMemberId = '';
 let selectedLabelId = '';
 let searchText = '';
+let bonifMonth = ''; // mês selecionado na aba Bonificação
 let sortState = { col: null, dir: 'desc' };
 let keepFocus = false;
 
@@ -50,8 +52,9 @@ const HTML_SECTIONS = [
   { id: 'mensal', label: 'Mensal' },
   { id: 'sessoes', label: 'Por sessão' },
   { id: 'membro', label: 'Por membro' },
+  { id: 'bonificacao', label: 'Bonificação' },
 ];
-const htmlSections = { graficos: true, geral: true, semanal: true, mensal: true, sessoes: true, membro: true };
+const htmlSections = { graficos: true, geral: true, semanal: true, mensal: true, sessoes: true, membro: true, bonificacao: true };
 
 const fmt = (ms) => formatDuration(ms, MODEL.config.timeFormat);
 const showPaused = () => !!MODEL.config.countPauses;
@@ -127,6 +130,24 @@ function csvForTab(tabId = activeTab) {
       .map((m) => [MODEL.memberName.get(m.memberId) || m.memberId, m.cardCount, fmt(m.effectiveMs), m.effectiveMs]);
     return toCsv(['Membro', 'Cards', 'Tempo', 'Tempo (ms)'], rows);
   }
+  if (tabId === 'bonificacao') {
+    const all = concludedByMember(filteredCards(), MODEL.at, MODEL.config);
+    const month = (bonifMonth && all.months.indexOf(bonifMonth) !== -1) ? bonifMonth : (all.months[0] || '');
+    const data = concludedByMember(filteredCards(), MODEL.at, MODEL.config, month);
+    const nm = (id) => MODEL.memberName.get(id) || id;
+    const metas = MODEL.config.metas || {};
+    const totalBy = new Map(data.rows.map((r) => [r.memberId, r]));
+    const head = ['Membro', ...data.weeks.map((w) => weekShort(w.label)),
+      'Entregue', 'Meta mín', 'Meta máx', 'Meta sem', 'Bonificação (R$)'];
+    const rows = MODEL.members.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map((m) => {
+      const r = totalBy.get(m.id); const entregue = r ? r.total : 0; const meta = metas[m.id] || {};
+      const b = bonusFor(entregue, metas[m.id]); const wm = weeklyMetaOf(metas[m.id]);
+      return [nm(m.id), ...data.weeks.map((w) => (r ? (r.perWeek[w.key] || 0) : 0)), entregue,
+        meta.min == null ? '' : meta.min, meta.max == null ? '' : meta.max,
+        wm == null ? '' : wm, b == null ? '' : b];
+    });
+    return toCsv(head, rows);
+  }
   const periods = tabId === 'semanal' ? r.weekly : r.monthly;
   const label = tabId === 'semanal' ? 'Semana' : 'Mês';
   const head = [label, 'Card', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
@@ -145,6 +166,7 @@ function csvAll() {
   return [
     sec('GERAL', 'geral'), sec('SEMANAL', 'semanal'),
     sec('MENSAL', 'mensal'), sec('POR SESSÃO', 'sessoes'), sec('POR MEMBRO', 'painel'),
+    sec('BONIFICAÇÃO', 'bonificacao'),
   ].join('\r\n\r\n');
 }
 
@@ -271,6 +293,29 @@ function buildHtmlReport(sections) {
   // Por membro
   const mRows = byMember.map((m) => [m.label, m.text]);
 
+  // Bonificação: cards concluídos por membro (mês selecionado) + metas e valor
+  const allBonif = concludedByMember(filteredCards(), MODEL.at, MODEL.config);
+  const bMonth = (bonifMonth && allBonif.months.indexOf(bonifMonth) !== -1) ? bonifMonth : (allBonif.months[0] || '');
+  const bonif = bMonth ? concludedByMember(filteredCards(), MODEL.at, MODEL.config, bMonth) : { weeks: [], rows: [] };
+  const bName = (id) => MODEL.memberName.get(id) || id;
+  const bMetas = MODEL.config.metas || {};
+  const bTotalBy = new Map(bonif.rows.map((r) => [r.memberId, r]));
+  let bonifHtml;
+  if (bMonth && MODEL.members.length) {
+    const bChart = barsHtml('Cards concluídos por membro', bonif.rows.map((r) => ({ label: bName(r.memberId), value: r.total, text: String(r.total) })));
+    const bHead = ['Membro', ...bonif.weeks.map((w) => weekShort(w.label)), 'Entregue', 'Meta mín', 'Meta máx', 'Meta sem.', 'Bonificação'];
+    const bRows = MODEL.members.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map((m) => {
+      const r = bTotalBy.get(m.id); const entregue = r ? r.total : 0; const meta = bMetas[m.id] || {};
+      const bonus = bonusFor(entregue, bMetas[m.id]); const wm = weeklyMetaOf(bMetas[m.id]);
+      return [bName(m.id), ...bonif.weeks.map((w) => (r ? (r.perWeek[w.key] || 0) : 0)), entregue,
+        meta.min == null ? '—' : meta.min, meta.max == null ? '—' : meta.max,
+        wm == null ? '—' : wm, brl(bonus)];
+    });
+    bonifHtml = `<p class="muted">Mês: ${esc(monthLabelPt(bMonth))}</p>` + bChart + tableHtml(bHead, bRows);
+  } else {
+    bonifHtml = '<p class="muted">Nenhum card concluído com membro atribuído.</p>';
+  }
+
   const style = `
     :root{color-scheme:light}
     *{box-sizing:border-box}
@@ -306,6 +351,7 @@ function buildHtmlReport(sections) {
   if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`);
   if (sections.sessoes) body.push(`<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`);
   if (sections.membro && MODEL.members.length) body.push(`<h2>Por membro</h2>${tableHtml(['Membro', 'Tempo'], mRows)}`);
+  if (sections.bonificacao) body.push(`<h2>Bonificação — cards concluídos por membro</h2>${bonifHtml}`);
   if (body.length === 0) body.push('<p class="muted">Nenhuma seção selecionada.</p>');
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">`
@@ -447,12 +493,112 @@ function renderPainel(r) {
   return wrap;
 }
 
+// rótulo curto de semana ("dd/mm–dd/mm") a partir de "Semana NN · dd/mm–dd/mm"
+function weekShort(label) { const p = label.split(' · '); return p[1] || label; }
+function monthLabelPt(mk) {
+  const [y, m] = mk.split('-').map(Number);
+  const s = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date(y, m - 1, 1));
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+const brl = (v) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+function weeklyMetaOf(meta) {
+  if (!meta || meta.min == null || meta.min === '') return null;
+  return Math.round(Number(meta.min) / 4); // meta semanal = meta mínima ÷ 4 semanas
+}
+
+function renderBonificacao() {
+  const all = concludedByMember(filteredCards(), MODEL.at, MODEL.config);
+  if (all.months.length === 0) {
+    return el('div', { class: 'tt-report-empty', text: 'Nenhum card concluído (com membro atribuído). A contagem usa cards na lista de conclusão.' });
+  }
+  if (!bonifMonth || all.months.indexOf(bonifMonth) === -1) bonifMonth = all.months[0];
+  const data = concludedByMember(filteredCards(), MODEL.at, MODEL.config, bonifMonth);
+  const name = (id) => MODEL.memberName.get(id) || id;
+  const metas = MODEL.config.metas || {};
+  const totalBy = new Map(data.rows.map((r) => [r.memberId, r]));
+  const memberList = MODEL.members.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    .filter((m) => matchesSearch(m.name));
+
+  const wrap = el('div', {});
+
+  // seletor de mês + salvar metas
+  const monthSel = el('select', { class: 'tt-select' });
+  for (const mk of all.months) { const o = el('option', { value: mk, text: monthLabelPt(mk) }); if (mk === bonifMonth) o.selected = true; monthSel.appendChild(o); }
+  monthSel.value = bonifMonth;
+  monthSel.addEventListener('change', () => { bonifMonth = monthSel.value; render(); });
+
+  const inputs = {};
+  const mkInput = (val) => { const i = el('input', { type: 'number', class: 'tt-meta-input' }); i.value = (val == null ? '' : val); return i; };
+
+  const btnSave = el('button', {
+    class: 'tt-btn is-primary', text: 'Salvar metas',
+    onclick: async () => {
+      const next = { ...(MODEL.config.metas || {}) };
+      for (const m of memberList) {
+        const inp = inputs[m.id]; if (!inp) continue;
+        const min = inp.min.value.trim(); const max = inp.max.value.trim();
+        const bMin = inp.bonusMin.value.trim(); const bMax = inp.bonusMax.value.trim();
+        if (min === '' && max === '' && bMin === '' && bMax === '') { delete next[m.id]; continue; }
+        next[m.id] = {
+          min: min === '' ? null : Number(min),
+          max: max === '' ? null : Number(max),
+          bonusMin: bMin === '' ? 500 : Number(bMin),
+          bonusMax: bMax === '' ? 1000 : Number(bMax),
+        };
+      }
+      await saveConfig(t, { ...MODEL.config, metas: next });
+      MODEL.config = { ...MODEL.config, metas: next };
+      flash(btnSave, 'Metas salvas!');
+      render();
+    },
+  });
+
+  wrap.appendChild(el('div', { class: 'tt-report-toolbar' }, [
+    el('div', { class: 'tt-report-meta' }, [
+      el('div', {}, [el('span', { class: 'tt-report-summary', text: 'Mês: ' }), monthSel]),
+      el('div', { class: 'tt-report-summary', text: 'Regra: <mín → R$0 · entre mín e máx → bônus mín · ≥ máx → bônus máx. Meta semanal = meta mínima ÷ 4.' }),
+    ]),
+    el('div', { class: 'tt-report-actions' }, [btnSave]),
+  ]));
+
+  // gráfico do mês
+  wrap.appendChild(el('div', { class: 'tt-dash' },
+    barChart('Cards concluídos por membro — ' + monthLabelPt(bonifMonth),
+      data.rows.map((r) => ({ label: name(r.memberId), value: r.total, text: String(r.total) })))));
+
+  // tabela editável
+  const head = [th('Membro'), ...data.weeks.map((w) => th(weekShort(w.label), 'num')),
+    th('Entregue', 'num'), th('Meta mín', 'num'), th('Meta máx', 'num'),
+    th('Bônus mín', 'num'), th('Bônus máx', 'num'), th('Meta sem.', 'num'), th('Bonificação', 'num')];
+  const body = memberList.map((m) => {
+    const r = totalBy.get(m.id);
+    const entregue = r ? r.total : 0;
+    const meta = metas[m.id] || {};
+    const inp = { min: mkInput(meta.min), max: mkInput(meta.max), bonusMin: mkInput(meta.bonusMin), bonusMax: mkInput(meta.bonusMax) };
+    inputs[m.id] = inp;
+    const bonus = bonusFor(entregue, metas[m.id]);
+    const wm = weeklyMetaOf(metas[m.id]);
+    return el('tr', {}, [
+      td(m.name, 'tt-td-card'),
+      ...data.weeks.map((w) => td(String(r ? (r.perWeek[w.key] || 0) : 0), 'num')),
+      td(String(entregue), 'num'),
+      el('td', { class: 'num' }, inp.min), el('td', { class: 'num' }, inp.max),
+      el('td', { class: 'num' }, inp.bonusMin), el('td', { class: 'num' }, inp.bonusMax),
+      td(wm == null ? '—' : String(wm), 'num'),
+      td(brl(bonus), 'num'),
+    ]);
+  });
+  wrap.appendChild(el('div', { class: 'tt-scroll' }, tableEl(head, body)));
+  return wrap;
+}
+
 function renderBody(r) {
   switch (activeTab) {
     case 'painel': return renderPainel(r);
     case 'semanal': return renderPeriods(r.weekly, 'semanal');
     case 'mensal': return renderPeriods(r.monthly, 'mensal');
     case 'sessoes': return renderSessoes(r);
+    case 'bonificacao': return renderBonificacao();
     case 'geral':
     default: return renderGeral(r);
   }
