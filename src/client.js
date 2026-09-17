@@ -46,7 +46,7 @@ function badgeFor(state, createdAt, config) {
     case Status.RUNNING: return { text: `▶ ${d}`, color: 'blue' };
     case Status.PAUSED:  return { text: `⏸ ${d}`, color: 'yellow' };
     case Status.DONE:    return { text: `✓ ${d}`, color: 'green' };
-    default:             return null; // 'idle' -> sem badge na frente (quadro limpo)
+    default:             return { text: `🗓 ${d}`, color: null }; // 'idle' -> idade na fila (neutro)
   }
 }
 
@@ -57,7 +57,7 @@ window.TrelloPowerUp.initialize({
       // O Trello re-executa card-badges logo após um card mudar de lista, então
       // reconciliamos aqui (detecção automática) e decidimos se há badge.
       reconcileAndPersist(t, config).then((state) => {
-        if (!config.showBadge || state.status === Status.IDLE) return []; // quadro limpo
+        if (!config.showBadge) return []; // idade na fila aparece mesmo sem "Iniciar"
         return [{
           // badge dinâmico: re-executa a cada `refresh` segundos p/ atualizar o tempo.
           dynamic: function () {
