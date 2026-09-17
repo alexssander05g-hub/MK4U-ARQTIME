@@ -34,6 +34,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   showBadge: true,       // exibir badge na frente do card?
   businessHoursOnly: false,               // contar só horas úteis? (preparado)
   business: { days: [1, 2, 3, 4, 5], start: '08:00', end: '18:00' },
+  metas: {},             // bonificação: { <memberId>: {min, max, bonusMin, bonusMax} }
 });
 
 // -- configuração do quadro -----------------------------------------------
@@ -44,6 +45,7 @@ export async function getConfig(t) {
     ...DEFAULT_CONFIG,
     ...(stored || {}),
     business: { ...DEFAULT_CONFIG.business, ...((stored && stored.business) || {}) },
+    metas: { ...((stored && stored.metas) || {}) },
   };
 }
 
