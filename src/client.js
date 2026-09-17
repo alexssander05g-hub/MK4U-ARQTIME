@@ -21,7 +21,7 @@
 
 import { getConfig, reconcileAndPersist, getState, apply } from './services/storage.js';
 import { start, pause, resume, finish, Status } from './services/tracker.js';
-import { cardActiveDays } from './services/report.js';
+import { cardDays, creationMsFromId } from './services/report.js';
 import { now } from './utils/time.js';
 
 const ICON = {
@@ -39,8 +39,8 @@ const ICON = {
 const BADGE_REFRESH = 15; // segundos (mínimo do Trello é 10; usamos 15)
 
 /** Monta o texto/cor do badge da FRENTE do card: DIAS ÚTEIS ATIVOS + status. */
-function badgeFor(state, config) {
-  const days = cardActiveDays(state, now(), config);
+function badgeFor(state, createdAt, config) {
+  const days = cardDays(createdAt, state, now(), config);
   const d = `${days}d`;
   switch (state.status) {
     case Status.RUNNING: return { text: `▶ ${d}`, color: 'blue' };
@@ -61,8 +61,8 @@ window.TrelloPowerUp.initialize({
         return [{
           // badge dinâmico: re-executa a cada `refresh` segundos p/ atualizar o tempo.
           dynamic: function () {
-            return reconcileAndPersist(t, config).then((s2) => {
-              const b = badgeFor(s2, config);
+            return Promise.all([reconcileAndPersist(t, config), t.card('id')]).then(([s2, card]) => {
+              const b = badgeFor(s2, creationMsFromId(card && card.id), config);
               return b ? { text: b.text, color: b.color, refresh: BADGE_REFRESH }
                        : { text: '', refresh: BADGE_REFRESH };
             });
@@ -75,8 +75,8 @@ window.TrelloPowerUp.initialize({
   // ---- Selo de status no verso do card ---------------------------------
   'card-detail-badges': function (t) {
     return getConfig(t).then((config) =>
-      reconcileAndPersist(t, config).then((state) => {
-        const days = cardActiveDays(state, now(), config);
+      Promise.all([reconcileAndPersist(t, config), t.card('id')]).then(([state, card]) => {
+        const days = cardDays(creationMsFromId(card && card.id), state, now(), config);
         const map = {
           idle:    { title: 'Controle de Tempo', text: 'Aguardando', color: 'light-gray' },
           running: { title: 'Controle de Tempo', text: 'Em andamento', color: 'blue' },
