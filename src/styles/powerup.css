@@ -137,6 +137,12 @@ body {
 .tt-report-meta { display: flex; flex-direction: column; gap: 6px; }
 .tt-report-summary { color: var(--tt-subtle); font-size: 13px; }
 .tt-report-toggle { font-size: 13px; color: var(--tt-text); }
+.tt-html-sections {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 2px 0 10px; font-size: 12px; color: var(--tt-text);
+}
+.tt-html-sections-label { color: var(--tt-subtle); font-weight: 600; }
+.tt-html-section { display: inline-flex; align-items: center; gap: 3px; cursor: pointer; }
 .tt-select {
   font-family: inherit; font-size: 13px; color: var(--tt-text);
   padding: 5px 8px; border: 1px solid var(--tt-border); border-radius: var(--tt-radius);
