@@ -143,8 +143,9 @@ function render() {
     container.appendChild(row('Conclusão', formatDateTimeLong(totals.lastEnd)));
   }
 
-  // DIAS ÚTEIS DESDE A CRIAÇÃO (sem contar fins de semana; congela no "Concluído")
-  if (state.status !== Status.IDLE) {
+  // DIAS ÚTEIS DESDE A CRIAÇÃO (idade na fila; aparece mesmo sem "Iniciar";
+  // sem contar fins de semana; congela no "Concluído")
+  {
     const days = cardDays(createdAt, state, now(), config);
     container.appendChild(row('Dias úteis (desde a criação)',
       el('span', { class: 'tt-value', text: `${days} ${days === 1 ? 'dia' : 'dias'}` })));

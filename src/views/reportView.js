@@ -35,7 +35,7 @@ const TABS = [
 
 let MODEL = null;             // { allCards, members, labels, memberName, config, at }
 let activeTab = 'geral';
-let includeUntracked = false;
+let includeUntracked = true; // mostra cards em fila (sem tempo) por padrão, com sua idade
 let selectedMemberId = '';
 let selectedLabelId = '';
 let searchText = '';
@@ -230,14 +230,14 @@ function buildHtmlReport() {
     MODEL.members.length ? barsHtml('Tempo por membro', byMember) : '',
   ].join('');
 
-  // tabela Geral
+  // tabela Geral (inclui cards em fila, com sua idade em dias)
   const gHead = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
-  const gRows = r.general.filter((x) => x.tracked).map((x) => [
+  const gRows = r.general.map((x) => [
     x.card, x.lista, STATUS_LABEL[x.status],
     x.inicio ? formatDateTime(x.inicio) : '—', x.conclusao ? formatDateTime(x.conclusao) : '—',
     x.days, x.sessions, ...(paused ? [fmt(x.pausedMs)] : []), fmt(x.effectiveMs),
   ]);
-  const gTotal = r.general.filter((x) => x.tracked).reduce((a, x) => a + x.effectiveMs, 0);
+  const gTotal = r.general.reduce((a, x) => a + x.effectiveMs, 0);
   const gFoot = ['Total', '', '', '', '', '', '', ...(paused ? [''] : []), fmt(gTotal)];
 
   // períodos
