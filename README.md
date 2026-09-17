@@ -62,8 +62,9 @@ início/fim (ou só o início, na sessão em aberto), com marca "Corrigido
 manualmente" no histórico. Útil quando alguém esquece o cronômetro rodando.
 
 Sobre o que aparece **onde**:
-- **Na frente do card:** os **dias úteis ativos** (ex.: `▶ 3d`), com a cor do
-  status. Fins de semana não contam; a contagem para ao ir para "Concluído".
+- **Na frente do card:** os **dias úteis desde a criação do card** (ex.: `▶ 6d`),
+  com a cor do status. Fins de semana não contam; a contagem congela ao ir para
+  "Concluído". A data de criação vem do próprio ID do card (client-side).
 - **No verso do card e no CSV:** o **tempo** (ex.: `02h 30min`), além dos dias.
 
 O relatório é 100% client-side — lê o estado de cada card (usando o id do card
