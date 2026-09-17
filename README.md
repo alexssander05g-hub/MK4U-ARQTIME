@@ -51,8 +51,9 @@ semana ISO começando na segunda; você não informa datas), e **Por sessão**
 No topo do relatório há **filtros** (por **membro** atribuído e por **etiqueta**)
 e uma **busca** por nome de card; clicar nos cabeçalhos da aba Geral **ordena**.
 A aba **Painel** mostra gráficos de barras (top cards, por semana, por mês, por
-membro). Dá para exportar o **CSV da aba** ou **Baixar tudo** (todas as abas num
-arquivo só). Filtro por atribuição — o cronômetro do card é único e
+membro). Dá para exportar o **CSV da aba**, **Baixar tudo** (todas as abas num
+arquivo só) ou o **Relatório (HTML)** — uma página autocontida com tabelas e
+gráficos, que abre no navegador e vira **PDF** por Imprimir → "Salvar como PDF". Filtro por atribuição — o cronômetro do card é único e
 compartilhado, não "tempo por pessoa". Quando a configuração conta pausas, o
 relatório traz também a coluna **Pausado**, além do tempo efetivo — como no card.
 
