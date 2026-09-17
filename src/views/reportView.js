@@ -42,6 +42,17 @@ let searchText = '';
 let sortState = { col: null, dir: 'desc' };
 let keepFocus = false;
 
+// Seções que entram no "Relatório (HTML)" — todas marcadas por padrão.
+const HTML_SECTIONS = [
+  { id: 'graficos', label: 'Gráficos' },
+  { id: 'geral', label: 'Geral' },
+  { id: 'semanal', label: 'Semanal' },
+  { id: 'mensal', label: 'Mensal' },
+  { id: 'sessoes', label: 'Por sessão' },
+  { id: 'membro', label: 'Por membro' },
+];
+const htmlSections = { graficos: true, geral: true, semanal: true, mensal: true, sessoes: true, membro: true };
+
 const fmt = (ms) => formatDuration(ms, MODEL.config.timeFormat);
 const showPaused = () => !!MODEL.config.countPauses;
 const matchesSearch = (name) => !searchText || name.toLowerCase().includes(searchText.toLowerCase());
@@ -201,7 +212,7 @@ function tableHtml(headArr, rowArrs, footArr) {
   return `<table><thead>${head}</thead><tbody>${body}</tbody>${foot}</table>`;
 }
 
-function buildHtmlReport() {
+function buildHtmlReport(sections) {
   const r = getReport();
   const paused = showPaused();
   const now_ = new Date();
@@ -288,18 +299,22 @@ function buildHtmlReport() {
       .charts{grid-template-columns:1fr 1fr}
     }`;
 
+  const body = [];
+  if (sections.graficos) body.push(`<h2>Visão geral</h2><div class="charts">${charts}</div>`);
+  if (sections.geral) body.push(`<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`);
+  if (sections.semanal) body.push(`<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`);
+  if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`);
+  if (sections.sessoes) body.push(`<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`);
+  if (sections.membro && MODEL.members.length) body.push(`<h2>Por membro</h2>${tableHtml(['Membro', 'Tempo'], mRows)}`);
+  if (body.length === 0) body.push('<p class="muted">Nenhuma seção selecionada.</p>');
+
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">`
     + `<title>Relatório de Tempo</title><style>${style}</style></head><body>`
     + `<h1>Relatório de Tempo${MODEL.boardName ? ' — ' + esc(MODEL.boardName) : ''}</h1>`
     + `<div class="meta">Gerado em ${esc(formatDateTime(now_.getTime()))} · Filtro: ${esc(filterLine)}<br>`
     + `${r.totals.trackedCount} card(s) com tempo · ${r.totals.visibleCount} no filtro · Total do quadro: ${esc(fmt(r.totals.totalMs))}</div>`
     + `<p class="muted">Dica: para gerar um PDF, use Imprimir (Ctrl+P) e escolha "Salvar como PDF".</p>`
-    + `<h2>Visão geral</h2><div class="charts">${charts}</div>`
-    + `<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`
-    + `<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`
-    + `<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`
-    + `<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`
-    + (MODEL.members.length ? `<h2>Por membro</h2>${tableHtml(['Membro', 'Tempo'], mRows)}` : '')
+    + body.join('')
     + `</body></html>`;
 }
 
@@ -496,8 +511,11 @@ function render() {
   const btnHtml = el('button', {
     class: 'tt-btn', text: 'Relatório (HTML)',
     onclick: () => {
-      const html = buildHtmlReport();
-      const name = `relatorio-tempo-${new Date().toISOString().slice(0, 10)}.html`;
+      const chosen = HTML_SECTIONS.filter((s) => htmlSections[s.id]);
+      const html = buildHtmlReport(htmlSections);
+      // nome reflete a seleção: 1 seção -> nome dela; várias -> "completo"
+      const tag = chosen.length === 1 ? chosen[0].id : (chosen.length === 0 ? 'vazio' : 'completo');
+      const name = `relatorio-${tag}-${new Date().toISOString().slice(0, 10)}.html`;
       if (downloadBlob(name, html, 'text/html;charset=utf-8;', false)) return;
       if (openInTab(html)) return;
       flash(btnHtml, 'Bloqueado no navegador', 2200);
@@ -508,12 +526,24 @@ function render() {
     onclick: async () => { const ok = await copyText(csvForTab()); flash(btnCopy, ok ? 'Copiado!' : 'Falhou'); },
   });
 
+  // caixinhas: quais seções entram no Relatório (HTML)
+  const sectionBoxes = el('div', { class: 'tt-html-sections' }, [
+    el('span', { class: 'tt-html-sections-label', text: 'Relatório HTML inclui:' }),
+    ...HTML_SECTIONS.map((s) => {
+      const chk = el('input', { type: 'checkbox' });
+      chk.checked = !!htmlSections[s.id];
+      chk.addEventListener('change', () => { htmlSections[s.id] = chk.checked; }); // sem re-render
+      return el('label', { class: 'tt-html-section' }, [chk, ' ' + s.label]);
+    }),
+  ]);
+
   const filters = el('div', { class: 'tt-report-filters' }, [memberSel, labelSel, search].filter(Boolean));
   const toolbar = el('div', { class: 'tt-report-toolbar' }, [
     el('div', { class: 'tt-report-meta' }, [summary, filters]),
     el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv, btnAll, btnHtml]),
   ]);
   root.appendChild(toolbar);
+  root.appendChild(sectionBoxes);
 
   root.appendChild(el('div', { class: 'tt-tabs' }, TABS.map((tab) => el('button', {
     class: `tt-tab${tab.id === activeTab ? ' is-active' : ''}`, text: tab.label,
