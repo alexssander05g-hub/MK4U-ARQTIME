@@ -278,9 +278,12 @@ export function buildReport(cards, at, config) {
         card: c.name, startedAt: s.startedAt, endedAt: open ? null : s.endedAt,
         effectiveMs: effMs, pausedMs, days: dayKeys.length, open,
       });
-      addTo(weekMap, isoWeekKey(s.startedAt), weekLabel(s.startedAt), mondayOf(s.startedAt).getTime(), c.name, effMs, pausedMs, dayKeys);
-      const md = new Date(s.startedAt);
-      addTo(monthMap, monthKey(s.startedAt), monthLabel(s.startedAt), new Date(md.getFullYear(), md.getMonth(), 1).getTime(), c.name, effMs, pausedMs, dayKeys);
+      // Agrupa pela CONCLUSÃO (endRef = fim da sessão; ou "agora" se ainda aberta),
+      // não pelo início — assim um card que terminou nesta semana aparece nela,
+      // mesmo que tenha começado numa semana anterior. Alinha com a aba Bonificação.
+      addTo(weekMap, isoWeekKey(endRef), weekLabel(endRef), mondayOf(endRef).getTime(), c.name, effMs, pausedMs, dayKeys);
+      const md = new Date(endRef);
+      addTo(monthMap, monthKey(endRef), monthLabel(endRef), new Date(md.getFullYear(), md.getMonth(), 1).getTime(), c.name, effMs, pausedMs, dayKeys);
     }
   }
 
