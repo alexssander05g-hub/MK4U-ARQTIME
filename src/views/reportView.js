@@ -31,7 +31,8 @@ const TABS = [
   { id: 'semanal', label: 'Semanal' },
   { id: 'mensal', label: 'Mensal' },
   { id: 'sessoes', label: 'Por sessão' },
-  { id: 'bonificacao', label: 'Bonificação' },
+  // OCULTO por enquanto — reativar removendo o comentário desta linha:
+  // { id: 'bonificacao', label: 'Bonificação' },
 ];
 
 let MODEL = null;             // { allCards, members, labels, memberName, config, at }
@@ -52,9 +53,10 @@ const HTML_SECTIONS = [
   { id: 'mensal', label: 'Mensal' },
   { id: 'sessoes', label: 'Por sessão' },
   { id: 'membro', label: 'Por membro' },
-  { id: 'bonificacao', label: 'Bonificação' },
+  // OCULTO por enquanto — reativar removendo o comentário desta linha:
+  // { id: 'bonificacao', label: 'Bonificação' },
 ];
-const htmlSections = { graficos: true, geral: true, semanal: true, mensal: true, sessoes: true, membro: true, bonificacao: true };
+const htmlSections = { graficos: true, geral: true, semanal: true, mensal: true, sessoes: true, membro: true, bonificacao: false };
 
 const fmt = (ms) => formatDuration(ms, MODEL.config.timeFormat);
 const showPaused = () => !!MODEL.config.countPauses;
@@ -166,7 +168,7 @@ function csvAll() {
   return [
     sec('GERAL', 'geral'), sec('SEMANAL', 'semanal'),
     sec('MENSAL', 'mensal'), sec('POR SESSÃO', 'sessoes'), sec('POR MEMBRO', 'painel'),
-    sec('BONIFICAÇÃO', 'bonificacao'),
+    // OCULTO por enquanto — reativar removendo o comentário: sec('BONIFICAÇÃO', 'bonificacao'),
   ].join('\r\n\r\n');
 }
 
