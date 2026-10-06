@@ -1,5 +1,5 @@
 /**
- * client.js — CONECTOR do Power-Up.
+ * client.js — CONECTOR do Power-Up "Controle de Tempo".
  *
  * É carregado pelo index.html (que também carrega a power-up.min.js do Trello).
  * Aqui registramos, via TrelloPowerUp.initialize(), uma função para cada
@@ -7,12 +7,17 @@
  * momentos apropriados.
  *
  * Capabilities usadas:
- *   card-badges         -> badge na FRENTE do card (🕐/⏸/✓ + tempo)
- *   card-detail-badges  -> selo de status no topo do verso do card
+ *   card-badges         -> badge na FRENTE do card: SÓ O STATUS (▶/⏸/✓)
+ *   card-detail-badges  -> no topo do verso: STATUS + TEMPO efetivo (horas)
  *   card-back-section   -> painel "Controle de Tempo" (iframe /views/section.html)
  *   card-buttons        -> botões Iniciar/Pausar/Retomar/Finalizar
  *   board-buttons       -> botão "Relatório de Tempo" no topo do quadro (modal)
  *   show-settings       -> tela de configurações (/views/settings.html)
+ *
+ * A CONTAGEM DE DIAS (idade do card) foi separada para um Power-Up próprio
+ * ("Contagem de Dias"). Este aqui cuida só de TEMPO (horas). O relatório ainda
+ * mostra a idade do card em dias, recalculada com a MESMA fórmula do outro
+ * Power-Up (ver report.js) — sem precisar ler os dados dele.
  *
  * A detecção AUTOMÁTICA por mudança de lista é feita dentro do card-badges:
  * o Trello re-renderiza o badge logo após um card mudar de lista, então esse é
@@ -20,9 +25,8 @@
  */
 
 import { getConfig, reconcileAndPersist, getState, apply } from './services/storage.js';
-import { start, pause, resume, finish, Status } from './services/tracker.js';
-import { cardDays, creationMsFromId } from './services/report.js';
-import { now } from './utils/time.js';
+import { start, pause, resume, finish, computeTotals, Status } from './services/tracker.js';
+import { now, formatDuration } from './utils/time.js';
 
 const ICON = {
   clock: './public/icons/clock.svg',
@@ -38,31 +42,37 @@ const ICON = {
 
 const BADGE_REFRESH = 15; // segundos (mínimo do Trello é 10; usamos 15)
 
-/** Monta o texto/cor do badge da FRENTE do card: DIAS ÚTEIS ATIVOS + status. */
-function badgeFor(state, createdAt, config) {
-  const days = cardDays(createdAt, state, now(), config);
-  const d = `${days}d`;
+/**
+ * Badge da FRENTE do card: SÓ O STATUS, sem número.
+ *   rodando  -> ▶ (azul)
+ *   pausado  -> ⏸ (amarelo)
+ *   concluído-> ✓ (verde)
+ *   aguardando (idle) -> sem badge (null)
+ */
+function statusBadge(state) {
   switch (state.status) {
-    case Status.RUNNING: return { text: `▶ ${d}`, color: 'blue' };
-    case Status.PAUSED:  return { text: `⏸ ${d}`, color: 'yellow' };
-    case Status.DONE:    return { text: `✓ ${d}`, color: 'green' };
-    default:             return { text: `🗓 ${d}`, color: null }; // 'idle' -> idade na fila (neutro)
+    case Status.RUNNING: return { text: '▶', color: 'blue' };
+    case Status.PAUSED:  return { text: '⏸', color: 'yellow' };
+    case Status.DONE:    return { text: '✓', color: 'green' };
+    default:             return null; // idle
   }
 }
 
 window.TrelloPowerUp.initialize({
-  // ---- Badge na frente do card -----------------------------------------
+  // ---- Badge na frente do card: só o status ----------------------------
   'card-badges': function (t) {
     return getConfig(t).then((config) =>
       // O Trello re-executa card-badges logo após um card mudar de lista, então
       // reconciliamos aqui (detecção automática) e decidimos se há badge.
       reconcileAndPersist(t, config).then((state) => {
-        if (!config.showBadge) return []; // idade na fila aparece mesmo sem "Iniciar"
+        if (!config.showBadge) return [];
+        if (!statusBadge(state)) return []; // idle: nada na frente
         return [{
-          // badge dinâmico: re-executa a cada `refresh` segundos p/ atualizar o tempo.
+          // badge dinâmico: re-executa a cada `refresh` s (mantém a detecção
+          // automática por movimentação de lista viva mesmo com o quadro parado).
           dynamic: function () {
-            return Promise.all([reconcileAndPersist(t, config), t.card('id')]).then(([s2, card]) => {
-              const b = badgeFor(s2, creationMsFromId(card && card.id), config);
+            return reconcileAndPersist(t, config).then((s2) => {
+              const b = statusBadge(s2);
               return b ? { text: b.text, color: b.color, refresh: BADGE_REFRESH }
                        : { text: '', refresh: BADGE_REFRESH };
             });
@@ -72,11 +82,11 @@ window.TrelloPowerUp.initialize({
     );
   },
 
-  // ---- Selo de status no verso do card ---------------------------------
+  // ---- Selo no verso do card: status + TEMPO efetivo -------------------
   'card-detail-badges': function (t) {
     return getConfig(t).then((config) =>
-      Promise.all([reconcileAndPersist(t, config), t.card('id')]).then(([state, card]) => {
-        const days = cardDays(creationMsFromId(card && card.id), state, now(), config);
+      reconcileAndPersist(t, config).then((state) => {
+        const eff = computeTotals(state, now(), config).effectiveMs;
         const map = {
           idle:    { title: 'Controle de Tempo', text: 'Aguardando', color: 'light-gray' },
           running: { title: 'Controle de Tempo', text: 'Em andamento', color: 'blue' },
@@ -86,7 +96,7 @@ window.TrelloPowerUp.initialize({
         const status = map[state.status] || map.idle;
         return [
           status,
-          { title: 'Dias úteis', text: `${days} ${days === 1 ? 'dia' : 'dias'}`, color: null },
+          { title: 'Tempo', text: formatDuration(eff, config.timeFormat), color: null },
         ];
       })
     );
