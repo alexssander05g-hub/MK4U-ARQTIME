@@ -16,6 +16,7 @@ import { getConfig, saveConfig } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
 import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
+import { isLicensed, LICENSE } from '../services/license.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
 import { el, clear } from '../utils/dom.js';
 
@@ -76,7 +77,10 @@ function getReport() {
   const key = `${selectedMemberId}|${selectedLabelId}`;
   if (_cacheReport && _cacheKey === key) return _cacheReport;
   _cacheReport = buildReport(
-    filteredCards().map((c) => ({ name: c.name, lista: c.lista, state: c.state, createdAt: c.createdAt })),
+    filteredCards().map((c) => ({
+      name: c.name, lista: c.lista, state: c.state, createdAt: c.createdAt,
+      dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity,
+    })),
     MODEL.at, MODEL.config,
   );
   _cacheKey = key;
@@ -109,7 +113,7 @@ function csvForTab(tabId = activeTab) {
   const r = getReport();
   const paused = showPaused();
   if (tabId === 'geral') {
-    const head = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Dias', 'Sessões',
+    const head = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões',
       ...(paused ? ['Pausado'] : []), 'Tempo efetivo', 'Tempo (ms)'];
     const rows = (includeUntracked ? r.general : r.general.filter((x) => x.tracked)).map((x) => [
       x.card, x.lista, STATUS_LABEL[x.status],
@@ -119,7 +123,7 @@ function csvForTab(tabId = activeTab) {
     return toCsv(head, rows);
   }
   if (tabId === 'sessoes') {
-    const head = ['Card', 'Início', 'Fim', 'Dias', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
+    const head = ['Card', 'Início', 'Fim', 'Dias ativos', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
     const rows = r.sessions.map((s) => [
       s.card, formatDateTime(s.startedAt), s.endedAt ? formatDateTime(s.endedAt) : '(em aberto)',
       s.days, ...(paused ? [fmt(s.pausedMs)] : []), fmt(s.effectiveMs), s.effectiveMs,
@@ -152,7 +156,7 @@ function csvForTab(tabId = activeTab) {
   }
   const periods = tabId === 'semanal' ? r.weekly : r.monthly;
   const label = tabId === 'semanal' ? 'Semana' : 'Mês';
-  const head = [label, 'Card', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
+  const head = [label, 'Card', 'Dias ativos', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo', 'Tempo (ms)'];
   const rows = [];
   for (const p of periods) {
     for (const row of p.rows) {
@@ -266,7 +270,7 @@ function buildHtmlReport(sections) {
   ].join('');
 
   // tabela Geral (inclui cards em fila, com sua idade em dias)
-  const gHead = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
+  const gHead = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
   const gRows = r.general.map((x) => [
     x.card, x.lista, STATUS_LABEL[x.status],
     x.inicio ? formatDateTime(x.inicio) : '—', x.conclusao ? formatDateTime(x.conclusao) : '—',
@@ -278,7 +282,7 @@ function buildHtmlReport(sections) {
   // períodos
   const periodTables = (periods, word) => (periods.length
     ? periods.map((p) => {
-      const head = ['Card', 'Dias', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
+      const head = ['Card', 'Dias ativos', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
       const rows = p.rows.map((row) => [row.card, row.days, row.sessions, ...(paused ? [fmt(row.pausedMs)] : []), fmt(row.effectiveMs)]);
       const foot = ['Total do período', p.totalDays, p.totalSessions, ...(paused ? [fmt(p.totalPausedMs)] : []), fmt(p.totalMs)];
       return `<h3>${esc(p.label)}</h3>${tableHtml(head, rows, foot)}`;
@@ -286,7 +290,7 @@ function buildHtmlReport(sections) {
     : `<p class="muted">Nenhum registro ${word}.</p>`);
 
   // Por sessão
-  const sHead = ['Card', 'Início', 'Fim', 'Dias', ...(paused ? ['Pausado'] : []), 'Tempo'];
+  const sHead = ['Card', 'Início', 'Fim', 'Dias ativos', ...(paused ? ['Pausado'] : []), 'Tempo'];
   const sRows = r.sessions.map((s) => [
     s.card, formatDateTime(s.startedAt), s.endedAt ? formatDateTime(s.endedAt) : '(em aberto)',
     s.days, ...(paused ? [fmt(s.pausedMs)] : []), fmt(s.effectiveMs),
@@ -425,7 +429,7 @@ function renderGeral(r) {
   const head = [
     sortableTh('Card', 'card'), sortableTh('Lista', 'lista'), th('Status'),
     th('Início'), th('Conclusão'),
-    sortableTh('Dias', 'dias', 'num'), sortableTh('Sessões', 'sessoes', 'num'),
+    sortableTh('Idade (dias)', 'dias', 'num'), sortableTh('Sessões', 'sessoes', 'num'),
     ...(paused ? [sortableTh('Pausado', 'pausado', 'num')] : []), sortableTh('Tempo', 'tempo', 'num'),
   ];
   return el('div', { class: 'tt-scroll' }, tableEl(head, body, foot));
@@ -442,7 +446,7 @@ function renderSessoes(r) {
     td(String(s.days), 'num'),
     ...(paused ? [td(fmt(s.pausedMs), 'num')] : []), td(fmt(s.effectiveMs), 'num'),
   ]));
-  const head = [th('Card'), th('Início'), th('Fim'), th('Dias', 'num'),
+  const head = [th('Card'), th('Início'), th('Fim'), th('Dias ativos', 'num'),
     ...(paused ? [th('Pausado', 'num')] : []), th('Tempo', 'num')];
   return el('div', { class: 'tt-scroll' }, tableEl(head, body));
 }
@@ -455,7 +459,7 @@ function renderPeriods(periods, periodWord) {
   if (filtered.length === 0) return el('div', { class: 'tt-report-empty', text: `Nenhum registro ${periodWord} para este filtro/busca.` });
   const wrap = el('div', { class: 'tt-scroll' });
   for (const p of filtered) {
-    const head = [th('Card'), th('Dias', 'num'), th('Sessões', 'num'),
+    const head = [th('Card'), th('Dias ativos', 'num'), th('Sessões', 'num'),
       ...(paused ? [th('Pausado', 'num')] : []), th('Tempo', 'num')];
     const body = p.rows.map((row) => el('tr', {}, [
       td(row.card, 'tt-td-card'), td(String(row.days), 'num'), td(String(row.sessions), 'num'),
@@ -717,13 +721,36 @@ function render() {
 
 // -- boot ------------------------------------------------------------------
 
+// Tela mostrada quando o quadro NÃO tem licença (recurso Premium bloqueado).
+function renderUpsell() {
+  const root = document.getElementById('app');
+  clear(root);
+  const cta = LICENSE.checkoutUrl
+    ? el('a', { class: 'tt-btn is-primary tt-upsell-btn', href: LICENSE.checkoutUrl, target: '_blank', rel: 'noopener', text: 'Assinar Premium' })
+    : el('div', { class: 'tt-report-empty', text: '(Configure a URL de assinatura em src/services/license.js → checkoutUrl.)' });
+  root.appendChild(el('div', { class: 'tt-upsell' }, [
+    el('div', { class: 'tt-upsell-title', text: '📊 Relatórios — recurso Premium' }),
+    el('p', { class: 'tt-upsell-text', text: 'A contagem de dias nos cards é gratuita. Os relatórios completos fazem parte do plano Premium deste quadro.' }),
+    el('ul', { class: 'tt-upsell-list' }, [
+      el('li', {}, 'Relatório por card, semana e mês'),
+      el('li', {}, 'Gráficos e painel de produtividade'),
+      el('li', {}, 'Exportação em PDF e CSV'),
+      el('li', {}, 'Filtros por membro e etiqueta'),
+    ]),
+    cta,
+  ]));
+  t.sizeTo('#app').catch(() => {});
+}
+
 async function boot() {
   const root = document.getElementById('app');
   try {
+    // Freemium: relatórios são o recurso Premium. Sem licença → tela de assinatura.
+    if (!(await isLicensed(t))) { renderUpsell(); return; }
     const config = await getConfig(t);
     const [board, cards, lists] = await Promise.all([
       t.board('id', 'name').catch(() => ({})),
-      t.cards('id', 'name', 'idList', 'members', 'labels'),
+      t.cards('id', 'name', 'idList', 'members', 'labels', 'dueComplete', 'dateLastActivity'),
       t.lists('id', 'name'),
     ]);
     const listName = new Map(lists.map((l) => [l.id, l.name]));
@@ -738,7 +765,11 @@ async function boot() {
       const labelIds = new Set();
       for (const m of members) { memberIds.add(m.id); if (!memberName.has(m.id)) memberName.set(m.id, m.fullName || m.username || m.id); }
       for (const l of labels) { labelIds.add(l.id); if (!labelName.has(l.id)) labelName.set(l.id, l.name || `(cor ${l.color || '—'})`); }
-      return { name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null), memberIds, labelIds, createdAt: creationMsFromId(c.id) };
+      return {
+        name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null),
+        memberIds, labelIds, createdAt: creationMsFromId(c.id),
+        dueComplete: !!c.dueComplete, dateLastActivity: c.dateLastActivity || null,
+      };
     });
     const byName = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
     const members = Array.from(memberName, ([id, name]) => ({ id, name })).sort(byName);
