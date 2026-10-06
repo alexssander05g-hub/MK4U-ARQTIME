@@ -12,7 +12,6 @@ import {
 import {
   computeTotals, start, pause, resume, finish, editSession, editOpenStart, Status,
 } from '../services/tracker.js';
-import { creationMsFromId, cardDays } from '../services/report.js';
 import {
   formatDuration, formatDateTimeLong, formatHistory, now,
 } from '../utils/time.js';
@@ -22,7 +21,6 @@ const t = window.TrelloPowerUp.iframe();
 
 let config = null;
 let state = null;
-let createdAt = null; // data de criação do card (derivada do ID)
 let tickTimer = null;
 let editing = null; // índice da sessão em edição, ou 'open', ou null
 
@@ -143,14 +141,6 @@ function render() {
     container.appendChild(row('Conclusão', formatDateTimeLong(totals.lastEnd)));
   }
 
-  // DIAS ÚTEIS DESDE A CRIAÇÃO (idade na fila; aparece mesmo sem "Iniciar";
-  // sem contar fins de semana; congela no "Concluído")
-  {
-    const days = cardDays(createdAt, state, now(), config);
-    container.appendChild(row('Dias úteis (desde a criação)',
-      el('span', { class: 'tt-value', text: `${days} ${days === 1 ? 'dia' : 'dias'}` })));
-  }
-
   // PAUSAS (só quando houver e quando a config contabiliza)
   if (config.countPauses && totals.pausedMs > 0) {
     container.appendChild(row('Tempo transcorrido',
@@ -233,8 +223,6 @@ function tick() {
 
 async function boot() {
   config = await getConfig(t);
-  const card = await t.card('id');
-  createdAt = creationMsFromId(card && card.id);
   // Ao abrir o card, também reconciliamos (caso ele tenha sido movido).
   state = await reconcileAndPersist(t, config);
   render();
