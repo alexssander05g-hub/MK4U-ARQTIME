@@ -81,18 +81,34 @@ export function creationMsFromId(id) {
 }
 
 /**
- * Dias úteis do card contados DESDE A CRIAÇÃO dele (sem contar fins de semana),
- * até agora — ou até a conclusão, quando o card está "Concluído" (a contagem
- * congela ao ir para a lista de fim). Se por algum motivo não der para derivar
- * a criação, cai para o primeiro início registrado.
+ * IDADE do card em dias úteis — IDÊNTICA ao Power-Up "Contagem de Dias".
+ *
+ * Como o Contagem de Dias não guarda nada (deriva tudo do ID do card), aqui
+ * recalculamos com a MESMA regra, sem precisar ler os dados dele:
+ *   - o DIA DA CRIAÇÃO conta como 0 (a contagem começa no dia seguinte);
+ *   - fins de semana (fora de business.days) não contam;
+ *   - CONGELA quando o card é marcado como CONCLUÍDO no checkbox nativo
+ *     (`dueComplete`): aí o fim passa a ser a última atividade do card
+ *     (`dateLastActivity`), que é a melhor aproximação sem guardar data.
+ *
+ * @param {number|null} createdAtMs  criação (ms), via creationMsFromId(card.id)
+ * @param {{dueComplete?:boolean, dateLastActivity?:string|number}} card
+ * @param {number} at   "agora" (ms)
  */
-export function cardDays(createdAtMs, state, at, config) {
+export function cardDays(createdAtMs, card, at, config) {
+  if (createdAtMs == null) return 0;
   const bd = (config && config.business && config.business.days) || DEFAULT_DAYS;
-  const totals = computeTotals(state, at, config);
-  const startMs = createdAtMs != null ? createdAtMs : totals.firstStart;
-  if (startMs == null) return 0;
-  const end = state.status === Status.DONE ? (totals.lastEnd || at) : at;
-  return businessDayKeys(startMs, end, bd).length;
+  const done = !!(card && card.dueComplete);
+  let end = at;
+  if (done && card && card.dateLastActivity != null) {
+    const la = new Date(card.dateLastActivity).getTime();
+    if (Number.isFinite(la)) end = la; // congela no momento (aprox.) da conclusão
+  }
+  // criação = dia 0: começa a contar no dia útil seguinte ao da criação
+  const start = new Date(createdAtMs);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() + 1);
+  return businessDayKeys(start.getTime(), end, bd).length;
 }
 
 /** Segunda-feira (00:00 local) da semana que contém `ms`. */
@@ -252,7 +268,7 @@ export function buildReport(cards, at, config) {
   for (const c of cards) {
     const st = c.state;
     const totals = computeTotals(st, at, config);
-    const days = cardDays(c.createdAt, st, at, config);
+    const days = cardDays(c.createdAt, c, at, config); // idade (igual ao PU Contagem de Dias)
     const tracked = st.status !== Status.IDLE;
     if (tracked) { trackedCount += 1; totalMs += totals.effectiveMs; }
 
