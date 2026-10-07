@@ -65,6 +65,15 @@ export async function saveState(t, state) {
 }
 
 /**
+ * Grava o estado de um card ESPECÍFICO pelo ID (usado pela RESTAURAÇÃO de
+ * backup, que roda no contexto do quadro, sem um "card atual"). O Trello aceita
+ * o id do card como escopo — simétrico ao t.get(cardId, 'shared', 'tt').
+ */
+export async function saveCardStateById(t, cardId, state) {
+  return t.set(cardId, 'shared', CARD_KEY, state);
+}
+
+/**
  * Aplica um comando manual (start/pause/resume/finish do tracker) e persiste.
  * @param {*} t
  * @param {(state:object, at:number)=>object} op  função pura do tracker
