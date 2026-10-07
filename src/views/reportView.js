@@ -720,6 +720,28 @@ function render() {
 
 // -- boot ------------------------------------------------------------------
 
+// Lê o estado ('tt') de cada card em LOTES (concorrência limitada) em vez de
+// disparar milhares de chamadas de uma vez — o que travava o relatório em
+// quadros grandes (3000+ cards). Atualiza o progresso no "Carregando…".
+const LOAD_CONCURRENCY = 30;
+async function loadStates(cards, onProgress) {
+  const out = new Array(cards.length);
+  let next = 0;
+  let done = 0;
+  async function worker() {
+    while (next < cards.length) {
+      const i = next;
+      next += 1;
+      try { out[i] = await t.get(cards[i].id, 'shared', 'tt'); }
+      catch (e) { out[i] = null; }
+      done += 1;
+      if (onProgress && (done % 50 === 0 || done === cards.length)) onProgress(done, cards.length);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(LOAD_CONCURRENCY, cards.length) }, worker));
+  return out;
+}
+
 async function boot() {
   const root = document.getElementById('app');
   try {
@@ -730,7 +752,9 @@ async function boot() {
       t.lists('id', 'name'),
     ]);
     const listName = new Map(lists.map((l) => [l.id, l.name]));
-    const states = await Promise.all(cards.map((c) => t.get(c.id, 'shared', 'tt').catch(() => null)));
+    const setLoading = (txt) => { if (root) root.textContent = txt; };
+    if (cards.length > 150) setLoading(`Carregando dados de ${cards.length} cards…`);
+    const states = await loadStates(cards, (d, total) => setLoading(`Carregando dados dos cards… ${d}/${total}`));
 
     const memberName = new Map();
     const labelName = new Map();
