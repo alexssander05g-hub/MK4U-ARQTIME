@@ -14,6 +14,10 @@
  *   board-buttons       -> botão "Relatório de Tempo" no topo do quadro (modal)
  *   show-settings       -> tela de configurações (/views/settings.html)
  *
+ * ÍCONES: todos EMBUTIDOS como data-URI (abaixo). Não dependem de nenhum arquivo
+ * em /public/icons — assim nunca aparecem como "imagem quebrada" no cabeçalho ou
+ * nos botões, mesmo se um arquivo faltar ou o GitHub Pages servir errado.
+ *
  * A CONTAGEM DE DIAS (idade do card) foi separada para um Power-Up próprio
  * ("Contagem de Dias"). Este aqui cuida só de TEMPO (horas). O relatório ainda
  * mostra a idade do card em dias, recalculada com a MESMA fórmula do outro
@@ -28,16 +32,38 @@ import { getConfig, reconcileAndPersist, getState, apply } from './services/stor
 import { start, pause, resume, finish, computeTotals, Status } from './services/tracker.js';
 import { now, formatDuration } from './utils/time.js';
 
+// -- ícones embutidos (data-URI) ------------------------------------------
+const GRAY = '#42526e';  // cinza do cabeçalho/botões claros
+const WHITE = '#ffffff'; // para cabeçalho escuro
+
+/** SVG de traço (outline) como data-URI. */
+function strokeIcon(color, inner) {
+  return 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`);
+}
+/** SVG preenchido (sólido) como data-URI. */
+function fillIcon(color, inner) {
+  return 'data:image/svg+xml,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="${color}">${inner}</svg>`);
+}
+
+const P = {
+  calClock: '<path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"/><path d="M8 2v4M16 2v4M3 10h6"/><circle cx="17" cy="16" r="5"/><path d="M17 14.5V16l1 1"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  play: '<path d="M8 5v14l11-7z"/>',
+  pause: '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="1.5"/>',
+};
+
 const ICON = {
-  clock: './public/icons/clock.svg',
-  clockLight: './public/icons/clock-light.svg',
-  calClock: './public/icons/calendar-clock.svg',
-  calClockLight: './public/icons/calendar-clock-light.svg',
-  play: './public/icons/play.svg',
-  pause: './public/icons/pause.svg',
-  resume: './public/icons/resume.svg',
-  stop: './public/icons/stop.svg',
-  gear: './public/icons/gear.svg',
+  clock: strokeIcon(GRAY, P.clock),
+  play: fillIcon(GRAY, P.play),
+  pause: fillIcon(GRAY, P.pause),
+  resume: fillIcon(GRAY, P.play),
+  stop: fillIcon(GRAY, P.stop),
+  // botão do quadro: dois tons para cabeçalho claro/escuro
+  reportDark: strokeIcon(WHITE, P.calClock),
+  reportLight: strokeIcon(GRAY, P.calClock),
 };
 
 const BADGE_REFRESH = 15; // segundos (mínimo do Trello é 10; usamos 15)
@@ -106,7 +132,7 @@ window.TrelloPowerUp.initialize({
   'card-back-section': function (t) {
     return {
       title: 'Controle de Tempo',
-      icon: t.signUrl(ICON.clock),
+      icon: ICON.clock, // data-URI embutido
       content: { type: 'iframe', url: t.signUrl('./views/section.html'), height: 260 },
     };
   },
@@ -116,15 +142,15 @@ window.TrelloPowerUp.initialize({
     return getState(t).then((state) => {
       const btns = [];
       if (state.status === Status.IDLE || state.status === Status.DONE) {
-        btns.push({ icon: t.signUrl(ICON.play), text: 'Iniciar', callback: (tt) => apply(tt, start) });
+        btns.push({ icon: ICON.play, text: 'Iniciar', callback: (tt) => apply(tt, start) });
       }
       if (state.status === Status.RUNNING) {
-        btns.push({ icon: t.signUrl(ICON.pause), text: 'Pausar', callback: (tt) => apply(tt, pause) });
-        btns.push({ icon: t.signUrl(ICON.stop), text: 'Finalizar', callback: (tt) => apply(tt, finish) });
+        btns.push({ icon: ICON.pause, text: 'Pausar', callback: (tt) => apply(tt, pause) });
+        btns.push({ icon: ICON.stop, text: 'Finalizar', callback: (tt) => apply(tt, finish) });
       }
       if (state.status === Status.PAUSED) {
-        btns.push({ icon: t.signUrl(ICON.resume), text: 'Retomar', callback: (tt) => apply(tt, resume) });
-        btns.push({ icon: t.signUrl(ICON.stop), text: 'Finalizar', callback: (tt) => apply(tt, finish) });
+        btns.push({ icon: ICON.resume, text: 'Retomar', callback: (tt) => apply(tt, resume) });
+        btns.push({ icon: ICON.stop, text: 'Finalizar', callback: (tt) => apply(tt, finish) });
       }
       return btns;
     });
@@ -132,11 +158,10 @@ window.TrelloPowerUp.initialize({
 
   // ---- Botão do quadro: Relatório de Tempo -----------------------------
   // Abre um modal com a tabela consolidada de todos os cards + exportação CSV.
-  'board-buttons': function (t) {
+  // Ícone EMBUTIDO (data-URI): nunca quebra no cabeçalho.
+  'board-buttons': function () {
     return [{
-      // URLs assinadas (absolutas) — ícone relativo aparecia quebrado no cabeçalho.
-      // dark = ícone para cabeçalho escuro (branco); light = para claro (cinza).
-      icon: { dark: t.signUrl(ICON.calClockLight), light: t.signUrl(ICON.calClock) },
+      icon: { dark: ICON.reportDark, light: ICON.reportLight },
       text: 'Relatório de Tempo',
       callback: (tt) => tt.modal({
         title: 'Relatório de Tempo',
