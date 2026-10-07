@@ -12,7 +12,7 @@
  * tracker.js, então os números batem com o verso de cada card.
  */
 
-import { getConfig, saveConfig } from '../services/storage.js';
+import { getConfig, saveConfig, saveCardStateById } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
 import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
@@ -44,6 +44,8 @@ let searchText = '';
 let bonifMonth = ''; // mês selecionado na aba Bonificação
 let sortState = { col: null, dir: 'desc' };
 let keepFocus = false;
+let restorePending = null; // backup carregado aguardando confirmação do usuário
+const BACKUP_WARN_DAYS = 7; // avisa para fazer backup depois de N dias sem backup
 
 // Seções que entram no "Relatório (HTML)" — todas marcadas por padrão.
 const HTML_SECTIONS = [
@@ -186,6 +188,117 @@ function downloadBlob(filename, text, mime, bom) {
   } catch (e) { return false; }
 }
 function downloadCsv(filename, text) { return downloadBlob(filename, text, 'text/csv;charset=utf-8;', true); }
+
+// -- backup / restauração (proteção contra perda de dados) ----------------
+// O Trello apaga TODOS os dados do Power-Up se ele for desativado sem "manter
+// dados". Por isso a cópia de segurança fica FORA do Trello: um arquivo .json
+// no computador, que a restauração reescreve de volta nos cards.
+
+/** Monta o objeto de backup com todos os cards que têm tempo registrado. */
+function buildBackup() {
+  const cards = MODEL.allCards
+    .filter((c) => c.state && c.state.status !== Status.IDLE)
+    .map((c) => ({ id: c.id, name: c.name, state: c.state }));
+  return {
+    app: 'controle-de-tempo', version: 1, exportedAt: Date.now(),
+    boardId: MODEL.boardId || '', boardName: MODEL.boardName || '',
+    count: cards.length, cards,
+  };
+}
+
+async function doBackup(btn) {
+  const data = buildBackup();
+  if (data.count === 0) { flash(btn, 'Nada para salvar'); return; }
+  const name = `backup-controle-tempo-${new Date().toISOString().slice(0, 10)}.json`;
+  const ok = downloadBlob(name, JSON.stringify(data, null, 2), 'application/json;charset=utf-8;', false);
+  if (!ok) { flash(btn, 'Download bloqueado', 2200); return; }
+  try { // marca a data; se o Power-Up for desativado some, e o aviso volta
+    const nextCfg = { ...MODEL.config, lastBackupAt: Date.now() };
+    await saveConfig(t, nextCfg); MODEL.config = nextCfg;
+  } catch (e) { /* não impede o backup */ }
+  flash(btn, 'Backup salvo!');
+  render();
+}
+
+/** Lê e valida o arquivo escolhido; guarda em restorePending para confirmar. */
+async function handleRestoreFile(file) {
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch (e) { restorePending = { error: 'Arquivo inválido (não é um JSON).' }; render(); return; }
+  const cards = data && Array.isArray(data.cards) ? data.cards : null;
+  if (!cards || !cards.length) { restorePending = { error: 'Backup vazio ou em formato desconhecido.' }; render(); return; }
+  const validIds = new Set(MODEL.allCards.map((c) => c.id));
+  const match = cards.filter((c) => c && c.id && validIds.has(c.id));
+  restorePending = { cards: match, skipped: cards.length - match.length, total: cards.length, exportedAt: data.exportedAt || null };
+  render();
+}
+
+/** Reescreve os estados do backup nos cards (em lotes), com progresso. */
+async function doRestore(statusEl) {
+  const items = restorePending && restorePending.cards ? restorePending.cards : [];
+  if (!items.length) { restorePending = null; render(); return; }
+  let next = 0; let done = 0; let fail = 0;
+  const setTxt = (txt) => { if (statusEl) statusEl.textContent = txt; };
+  async function worker() {
+    while (next < items.length) {
+      const i = next; next += 1;
+      try { await saveCardStateById(t, items[i].id, normalize(items[i].state)); }
+      catch (e) { fail += 1; }
+      done += 1;
+      if (done % 25 === 0 || done === items.length) setTxt(`Restaurando… ${done}/${items.length}`);
+    }
+  }
+  setTxt(`Restaurando… 0/${items.length}`);
+  await Promise.all(Array.from({ length: Math.min(30, items.length) }, worker));
+  restorePending = null;
+  setTxt(`Concluído: ${items.length - fail} restaurado(s)${fail ? `, ${fail} falhou(aram)` : ''}. Recarregando…`);
+  await boot(); // recarrega os dados do quadro para refletir a restauração
+}
+
+/** Barra de backup/restauração + aviso, no topo do relatório. */
+function backupBar() {
+  const wrap = el('div', { style: 'margin:8px 0 4px;padding:10px 12px;border:1px solid #dfe1e6;border-radius:8px;background:#fafbfc' });
+
+  const last = MODEL.config.lastBackupAt || null;
+  const days = last ? Math.floor((Date.now() - last) / 86400000) : null;
+  if (last == null || days >= BACKUP_WARN_DAYS) {
+    wrap.appendChild(el('div', {
+      style: 'color:#974f0c;background:#fff7eb;border:1px solid #ffe2b8;padding:6px 10px;border-radius:6px;margin-bottom:8px;font-size:13px',
+      text: last == null
+        ? '⚠️ Você ainda não fez backup. Se o Power-Up for desativado, o Trello apaga os tempos dos cards. Faça um backup e guarde o arquivo.'
+        : `⚠️ Último backup há ${days} dia(s). Recomendado fazer um novo.`,
+    }));
+  } else {
+    wrap.appendChild(el('div', { style: 'color:#5e6c84;font-size:12px;margin-bottom:8px', text: `Último backup: ${formatDateTime(last)}.` }));
+  }
+
+  const btnBackup = el('button', { class: 'tt-btn is-primary', text: '⬇ Backup (.json)', onclick: () => doBackup(btnBackup) });
+  const fileInput = el('input', { type: 'file', accept: '.json,application/json', style: 'display:none' });
+  fileInput.addEventListener('change', () => { if (fileInput.files && fileInput.files[0]) handleRestoreFile(fileInput.files[0]); });
+  const btnRestore = el('button', { class: 'tt-btn', text: '⬆ Restaurar backup', onclick: () => fileInput.click() });
+  wrap.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;align-items:center' }, [btnBackup, btnRestore, fileInput]));
+
+  if (restorePending) {
+    if (restorePending.error) {
+      wrap.appendChild(el('div', { style: 'color:#ae2a19;margin-top:8px;font-size:13px', text: '❌ ' + restorePending.error }));
+    } else {
+      const statusEl = el('span', { style: 'font-size:12px;color:#5e6c84' });
+      const when = restorePending.exportedAt ? ' de ' + formatDateTime(restorePending.exportedAt) : '';
+      wrap.appendChild(el('div', { style: 'margin-top:10px;border-top:1px dashed #dfe1e6;padding-top:8px' }, [
+        el('div', { style: 'font-size:13px;color:#172b4d;margin-bottom:8px',
+          text: `Backup${when}: ${restorePending.cards.length} card(s) serão restaurados`
+            + (restorePending.skipped ? ` (${restorePending.skipped} ignorado(s) — não existem neste quadro)` : '')
+            + '. Isso SOBRESCREVE o tempo atual desses cards.' }),
+        el('div', { style: 'display:flex;gap:8px;align-items:center' }, [
+          el('button', { class: 'tt-btn', text: 'Cancelar', onclick: () => { restorePending = null; render(); } }),
+          el('button', { class: 'tt-btn is-danger', text: 'Confirmar restauração', onclick: () => doRestore(statusEl) }),
+          statusEl,
+        ]),
+      ]));
+    }
+  }
+  return wrap;
+}
 
 /** Fallback quando o download é bloqueado no iframe: abre o HTML em nova aba. */
 function openInTab(html) {
@@ -695,6 +808,7 @@ function render() {
   ]);
   root.appendChild(toolbar);
   root.appendChild(sectionBoxes);
+  root.appendChild(backupBar());
 
   root.appendChild(el('div', { class: 'tt-tabs' }, TABS.map((tab) => el('button', {
     class: `tt-tab${tab.id === activeTab ? ' is-active' : ''}`, text: tab.label,
@@ -766,6 +880,7 @@ async function boot() {
       for (const m of members) { memberIds.add(m.id); if (!memberName.has(m.id)) memberName.set(m.id, m.fullName || m.username || m.id); }
       for (const l of labels) { labelIds.add(l.id); if (!labelName.has(l.id)) labelName.set(l.id, l.name || `(cor ${l.color || '—'})`); }
       return {
+        id: c.id,
         name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null),
         memberIds, labelIds, createdAt: creationMsFromId(c.id),
         dueComplete: !!c.dueComplete, dateLastActivity: c.dateLastActivity || null,
@@ -775,7 +890,7 @@ async function boot() {
     const members = Array.from(memberName, ([id, name]) => ({ id, name })).sort(byName);
     const labels = Array.from(labelName, ([id, name]) => ({ id, name })).sort(byName);
 
-    MODEL = { allCards, members, labels, memberName, config, at: now(), boardName: board && board.name ? board.name : '' };
+    MODEL = { allCards, members, labels, memberName, config, at: now(), boardId: board && board.id ? board.id : '', boardName: board && board.name ? board.name : '' };
     render();
   } catch (e) {
     clear(root);
