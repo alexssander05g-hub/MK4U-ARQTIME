@@ -402,11 +402,14 @@ function buildHtmlReport(sections) {
   const byMember = timeByMember(filteredCards(), MODEL.at, MODEL.config)
     .map((m) => ({ label: MODEL.memberName.get(m.memberId) || m.memberId, value: m.effectiveMs, text: fmt(m.effectiveMs) }));
 
+  const lineHtml = (title, pts) => `<section class="chart chart-wide"><h3>${esc(title)}</h3>${lineChartSvg(pts)}</section>`;
   const charts = [
     barsHtml('Top cards por tempo', top),
     barsHtml('Tempo por semana', weeks),
     barsHtml('Tempo por mês', months),
     MODEL.members.length ? barsHtml('Tempo por membro', byMember) : '',
+    lineHtml('Média de dias por semana — concluídos', avgPoints(dsum.weekly, 'semanal')),
+    lineHtml('Média de dias por mês — concluídos', avgPoints(dsum.monthly, 'mensal')),
   ].join('');
 
   // tabela Geral (inclui cards em fila, com sua idade em dias)
@@ -476,6 +479,7 @@ function buildHtmlReport(sections) {
     tfoot td{font-weight:700;background:#fafbfc}
     td:nth-child(n+6){text-align:right;font-variant-numeric:tabular-nums}
     .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .chart-wide{grid-column:1 / -1}
     .chart h3{margin-top:0}
     .bar{display:grid;grid-template-columns:38% 1fr auto;align-items:center;gap:8px;margin-bottom:5px}
     .bl{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -555,6 +559,70 @@ function barChart(title, items) {
     el('div', { class: 'tt-bar-val', text: i.text }),
   ]));
   return el('div', { class: 'tt-chart' }, [el('div', { class: 'tt-chart-title', text: title }), ...rows]);
+}
+
+// -- gráfico de LINHA (média de dias por período) --------------------------
+
+const MESES_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** Média de dias (ponderada pela contagem) de uma distribuição {days,count}. */
+function avgDays(dist, total) {
+  if (!total) return 0;
+  let s = 0; for (const d of dist) s += d.days * d.count;
+  return s / total;
+}
+/** Rótulo curto do eixo X. Semana: data de início "dd/mm". Mês: "out/26". */
+function periodShortLabel(p, kind) {
+  if (kind === 'semanal') { const s = weekShort(p.label); return (s.split('–')[0] || s).trim(); }
+  const [y, m] = p.key.split('-');
+  return `${MESES_ABBR[Number(m) - 1] || m}/${String(y).slice(2)}`;
+}
+/** Converte períodos (desc) em pontos do gráfico em ordem cronológica (asc). */
+function avgPoints(periods, kind) {
+  return periods.slice().reverse()
+    .map((p) => ({ label: periodShortLabel(p, kind), value: avgDays(p.dist, p.total), count: p.total }));
+}
+
+/** Gera o SVG (string) de um gráfico de linha de 1 série. */
+function lineChartSvg(points) {
+  if (!points.length) return '<div class="tt-report-empty">Sem projetos concluídos para o gráfico.</div>';
+  const W = 680, H = 230, L = 42, R = 18, T = 16, B = 42;
+  const pw = W - L - R, ph = H - T - B;
+  const n = points.length;
+  const maxV = Math.max(1, ...points.map((p) => p.value));
+  const niceMax = Math.max(1, Math.ceil(maxV));
+  const X = (i) => (n === 1 ? L + pw / 2 : L + (i * pw) / (n - 1));
+  const Y = (v) => T + ph - (v / niceMax) * ph;
+  const grid = [0, 0.5, 1].map((f) => {
+    const v = niceMax * f; const y = Y(v);
+    return `<line x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}" stroke="#ebecf0"/>`
+      + `<text x="${L - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="#97a0af">${v % 1 ? v.toFixed(1) : v.toFixed(0)}</text>`;
+  }).join('');
+  const poly = points.map((p, i) => `${X(i).toFixed(1)},${Y(p.value).toFixed(1)}`).join(' ');
+  const dots = points.map((p, i) => {
+    const x = X(i), y = Y(p.value);
+    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="#0079bf"/>`
+      + `<text x="${x.toFixed(1)}" y="${(y - 7).toFixed(1)}" text-anchor="middle" font-size="10" fill="#172b4d">${p.value.toFixed(1)}</text>`;
+  }).join('');
+  const rot = n > 8;
+  const yLab = H - B + 14;
+  const xlabels = points.map((p, i) => {
+    const x = X(i);
+    const tr = rot ? ` transform="rotate(-35 ${x.toFixed(1)} ${yLab})"` : '';
+    return `<text x="${x.toFixed(1)}" y="${yLab}" text-anchor="${rot ? 'end' : 'middle'}" font-size="10" fill="#5e6c84"${tr}>${esc(p.label)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" style="max-width:720px">`
+    + `<line x1="${L}" y1="${T}" x2="${L}" y2="${T + ph}" stroke="#dfe1e6"/>`
+    + `<line x1="${L}" y1="${T + ph}" x2="${W - R}" y2="${T + ph}" stroke="#dfe1e6"/>`
+    + `${grid}<polyline fill="none" stroke="#0079bf" stroke-width="2" points="${poly}"/>${dots}${xlabels}</svg>`;
+}
+
+/** Nó DOM com título + gráfico de linha. */
+function lineChart(title, points) {
+  const box = document.createElement('div');
+  box.className = 'tt-chart';
+  box.innerHTML = `<div class="tt-chart-title">${esc(title)}</div>${lineChartSvg(points)}`;
+  return box;
 }
 
 // -- abas ------------------------------------------------------------------
@@ -646,7 +714,14 @@ function renderPainel(r) {
       .map((m) => ({ label: MODEL.memberName.get(m.memberId) || m.memberId, value: m.effectiveMs, text: fmt(m.effectiveMs) }));
     wrap.appendChild(barChart('Tempo por membro', bm));
   }
-  return wrap;
+
+  // Gráficos de LINHA: média de dias dos projetos concluídos (automático)
+  const ds = getDaysSummary();
+  const lines = el('div', { class: 'tt-scroll' }, [
+    lineChart('Média de dias por semana — projetos concluídos', avgPoints(ds.weekly, 'semanal')),
+    lineChart('Média de dias por mês — projetos concluídos', avgPoints(ds.monthly, 'mensal')),
+  ]);
+  return el('div', {}, [wrap, lines]);
 }
 
 // rótulo curto de semana ("dd/mm–dd/mm") a partir de "Semana NN · dd/mm–dd/mm"
