@@ -14,7 +14,7 @@
 
 import { getConfig, saveConfig, saveCardStateById } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
-import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor } from '../services/report.js';
+import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor, daysSummary } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
 import { el, clear } from '../utils/dom.js';
@@ -86,6 +86,19 @@ function getReport() {
   );
   _cacheKey = key;
   return _cacheReport;
+}
+
+let _cacheDaysKey = null;
+let _cacheDays = null;
+function getDaysSummary() {
+  const key = `${selectedMemberId}|${selectedLabelId}`;
+  if (_cacheDays && _cacheDaysKey === key) return _cacheDays;
+  _cacheDays = daysSummary(
+    filteredCards().map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity })),
+    MODEL.at, MODEL.config,
+  );
+  _cacheDaysKey = key;
+  return _cacheDays;
 }
 
 // -- ordenação (aba Geral) -------------------------------------------------
@@ -352,8 +365,22 @@ function tableHtml(headArr, rowArrs, footArr) {
   return `<table><thead>${head}</thead><tbody>${body}</tbody>${foot}</table>`;
 }
 
+function daysBlockHtml(headLabel, dist, total, isGeral) {
+  const head = `<div class="daysh">${esc(headLabel)}</div>`;
+  if (!dist.length) return `<div class="daysc${isGeral ? ' geral' : ''}">${head}<p class="muted">Nenhum concluído.</p></div>`;
+  const rows = dist.map((d) => `<div class="daysr"><span>${d.days}d</span><b>${d.count}</b></div>`).join('');
+  return `<div class="daysc${isGeral ? ' geral' : ''}">${head}${rows}<div class="daysr dayst"><span>TOTAL</span><b>${total}</b></div></div>`;
+}
+function daysSectionHtml(dsum, kind) {
+  const periods = kind === 'semanal' ? dsum.weekly : dsum.monthly;
+  const blocks = periods.map((p) => daysBlockHtml(p.label, p.dist, p.total, false)).join('')
+    + daysBlockHtml('Geral — todos os concluídos', dsum.general, dsum.generalTotal, true);
+  return `<div class="daysgrid">${blocks}</div>`;
+}
+
 function buildHtmlReport(sections) {
   const r = getReport();
+  const dsum = getDaysSummary();
   const paused = showPaused();
   const now_ = new Date();
 
@@ -455,7 +482,14 @@ function buildHtmlReport(sections) {
     .bf{display:block;background:#0079bf;height:100%;border-radius:6px}
     .bv{font-size:11px;color:#6b778c;white-space:nowrap;font-variant-numeric:tabular-nums}
     .muted{color:#6b778c;font-size:12px}
+    .daysgrid{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 16px}
+    .daysc{border:1px solid #dfe1e6;border-radius:8px;padding:10px 12px;min-width:170px}
+    .daysc.geral{background:#f4f9ff;border-color:#b3d4ff}
+    .daysh{font-weight:700;font-size:12px;margin-bottom:6px}
+    .daysr{display:flex;justify-content:space-between;gap:16px;font-size:12px;padding:2px 0}
+    .daysr.dayst{border-top:1px solid #dfe1e6;margin-top:5px;padding-top:5px;font-weight:700}
     @media print{
+      .daysc{page-break-inside:avoid}
       body{padding:0}
       h2{page-break-after:avoid}
       table,.chart{page-break-inside:avoid}
@@ -464,9 +498,12 @@ function buildHtmlReport(sections) {
 
   const body = [];
   if (sections.graficos) body.push(`<h2>Visão geral</h2><div class="charts">${charts}</div>`);
-  if (sections.geral) body.push(`<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`);
-  if (sections.semanal) body.push(`<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`);
-  if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`);
+  if (sections.geral) body.push(`<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`
+    + `<h3>Resumo de dias — concluídos (geral)</h3><div class="daysgrid">${daysBlockHtml('Todos os concluídos', dsum.general, dsum.generalTotal, true)}</div>`);
+  if (sections.semanal) body.push(`<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`
+    + `<h3>Resumo de dias por semana — concluídos</h3>${daysSectionHtml(dsum, 'semanal')}`);
+  if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`
+    + `<h3>Resumo de dias por mês — concluídos</h3>${daysSectionHtml(dsum, 'mensal')}`);
   if (sections.sessoes) body.push(`<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`);
   if (sections.membro && MODEL.members.length) body.push(`<h2>Por membro</h2>${tableHtml(['Membro', 'Tempo'], mRows)}`);
   if (sections.bonificacao) body.push(`<h2>Bonificação — cards concluídos por membro</h2>${bonifHtml}`);
@@ -710,15 +747,74 @@ function renderBonificacao() {
   return wrap;
 }
 
+// -- resumo de dias (histograma de projetos concluídos) --------------------
+
+function injectDaysCss() {
+  if (document.getElementById('tt-days-css')) return;
+  const s = document.createElement('style'); s.id = 'tt-days-css';
+  s.textContent = `
+    .tt-days-wrap{margin-top:16px}
+    .tt-days-title{font-size:14px;font-weight:700;color:#172b4d;margin:8px 0 10px}
+    .tt-days-grid{display:flex;flex-wrap:wrap;gap:10px}
+    .tt-days-card{border:1px solid #dfe1e6;border-radius:8px;padding:12px 14px;background:#fff;min-width:200px}
+    .tt-days-head{font-weight:700;color:#172b4d;margin-bottom:8px;font-size:13px}
+    .tt-days-row{display:flex;justify-content:space-between;gap:16px;font-size:13px;padding:3px 0}
+    .tt-days-row.is-total{border-top:1px solid #dfe1e6;margin-top:6px;padding-top:6px;font-weight:700}
+    .tt-days-card.is-geral{background:#f4f9ff;border-color:#b3d4ff}
+    .tt-days-empty{color:#97a0af;font-size:12px}
+  `;
+  document.head.appendChild(s);
+}
+
+function daysSummaryBlock(headLabel, dist, total, isGeral) {
+  injectDaysCss();
+  const card = el('div', { class: `tt-days-card${isGeral ? ' is-geral' : ''}` }, [
+    el('div', { class: 'tt-days-head', text: headLabel }),
+  ]);
+  if (!dist.length) { card.appendChild(el('div', { class: 'tt-days-empty', text: 'Nenhum projeto concluído.' })); return card; }
+  for (const d of dist) {
+    card.appendChild(el('div', { class: 'tt-days-row' }, [
+      el('span', { text: `${d.days}d` }), el('b', { text: String(d.count) }),
+    ]));
+  }
+  card.appendChild(el('div', { class: 'tt-days-row is-total' }, [
+    el('span', { text: 'TOTAL' }), el('b', { text: String(total) }),
+  ]));
+  return card;
+}
+
+/** Bloco "Resumo de dias" para a aba de período (semanal/mensal): por período + geral. */
+function renderDaysSummary(kind) {
+  const ds = getDaysSummary();
+  const periods = kind === 'semanal' ? ds.weekly : ds.monthly;
+  const grid = el('div', { class: 'tt-days-grid' });
+  if (!periods.length) grid.appendChild(el('div', { class: 'tt-days-empty', text: 'Nenhum projeto concluído no período.' }));
+  for (const p of periods) grid.appendChild(daysSummaryBlock(p.label, p.dist, p.total, false));
+  grid.appendChild(daysSummaryBlock('Geral — todos os concluídos', ds.general, ds.generalTotal, true));
+  return el('div', { class: 'tt-days-wrap' }, [
+    el('div', { class: 'tt-days-title', text: 'Resumo de dias — projetos concluídos (idade em dias úteis)' }),
+    grid,
+  ]);
+}
+
+/** Só o bloco geral — usado no fim da aba Geral. */
+function renderDaysGeneral() {
+  const ds = getDaysSummary();
+  return el('div', { class: 'tt-days-wrap' }, [
+    el('div', { class: 'tt-days-title', text: 'Resumo de dias — projetos concluídos (geral)' }),
+    el('div', { class: 'tt-days-grid' }, [daysSummaryBlock('Todos os concluídos', ds.general, ds.generalTotal, true)]),
+  ]);
+}
+
 function renderBody(r) {
   switch (activeTab) {
     case 'painel': return renderPainel(r);
-    case 'semanal': return renderPeriods(r.weekly, 'semanal');
-    case 'mensal': return renderPeriods(r.monthly, 'mensal');
+    case 'semanal': return el('div', {}, [renderPeriods(r.weekly, 'semanal'), renderDaysSummary('semanal')]);
+    case 'mensal': return el('div', {}, [renderPeriods(r.monthly, 'mensal'), renderDaysSummary('mensal')]);
     case 'sessoes': return renderSessoes(r);
     case 'bonificacao': return renderBonificacao();
     case 'geral':
-    default: return renderGeral(r);
+    default: return el('div', {}, [renderGeral(r), renderDaysGeneral()]);
   }
 }
 
