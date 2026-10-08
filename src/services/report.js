@@ -215,6 +215,58 @@ export function concludedByMember(cards, at, config, monthFilter) {
 }
 
 /**
+ * RESUMO DE DIAS (histograma) — projetos CONCLUÍDOS agrupados por quantos dias
+ * úteis levaram (a "idade em dias", igual à coluna do relatório e ao Power-Up
+ * Contagem de Dias). Conta quantos projetos caíram em cada valor de dias.
+ *
+ * Um card entra quando está CONCLUÍDO (dueComplete = checkbox nativo). É contado
+ * na SEMANA/MÊS da conclusão (dateLastActivity, o mesmo instante que congela a
+ * idade). Retorna a distribuição geral + por semana + por mês.
+ *
+ * @param {{createdAt:number, dueComplete?:boolean, dateLastActivity?:string|number}[]} cards
+ * @returns {{
+ *   general: {days:number,count:number}[], generalTotal:number,
+ *   weekly:  {key:string,label:string,dist:{days:number,count:number}[],total:number}[],
+ *   monthly: {key:string,label:string,dist:{days:number,count:number}[],total:number}[]
+ * }}
+ */
+export function daysSummary(cards, at, config) {
+  const bump = (map, k) => map.set(k, (map.get(k) || 0) + 1);
+  const general = new Map();
+  const weeks = new Map();
+  const months = new Map();
+
+  for (const c of cards) {
+    if (!c || !c.dueComplete) continue; // só concluídos (checkbox nativo)
+    const age = cardDays(c.createdAt, c, at, config);
+    bump(general, age);
+    const compMs = c.dateLastActivity != null ? new Date(c.dateLastActivity).getTime() : NaN;
+    if (!Number.isFinite(compMs)) continue;
+    const wk = isoWeekKey(compMs);
+    if (!weeks.has(wk)) weeks.set(wk, { key: wk, label: weekLabel(compMs), ts: mondayOf(compMs).getTime(), dist: new Map(), total: 0 });
+    const w = weeks.get(wk); bump(w.dist, age); w.total += 1;
+    const mk = monthKey(compMs);
+    const md = new Date(compMs);
+    if (!months.has(mk)) months.set(mk, { key: mk, label: monthLabel(compMs), ts: new Date(md.getFullYear(), md.getMonth(), 1).getTime(), dist: new Map(), total: 0 });
+    const m = months.get(mk); bump(m.dist, age); m.total += 1;
+  }
+
+  const toSorted = (map) => Array.from(map.entries())
+    .map(([days, count]) => ({ days: Number(days), count }))
+    .sort((a, b) => a.days - b.days);
+  const finalize = (map) => Array.from(map.values())
+    .sort((a, b) => b.ts - a.ts) // período mais recente primeiro
+    .map((p) => ({ key: p.key, label: p.label, dist: toSorted(p.dist), total: p.total }));
+
+  return {
+    general: toSorted(general),
+    generalTotal: Array.from(general.values()).reduce((s, n) => s + n, 0),
+    weekly: finalize(weeks),
+    monthly: finalize(months),
+  };
+}
+
+/**
  * Bonificação (R$) de uma pessoa, a partir do total entregue no mês e da meta.
  * Regra: entregue < mín → 0; mín ≤ entregue < máx → bonusMin; entregue ≥ máx → bonusMax.
  * @param {number} entregue  cards concluídos no mês
