@@ -27,7 +27,7 @@ const STATUS_LABEL = {
 
 const TABS = [
   { id: 'geral', label: 'Geral' },
-  { id: 'painel', label: 'Painel' },
+  { id: 'painel', label: 'Relatório' },
   { id: 'semanal', label: 'Semanal' },
   { id: 'mensal', label: 'Mensal' },
   { id: 'sessoes', label: 'Por sessão' },
@@ -50,16 +50,18 @@ const BACKUP_WARN_DAYS = 7; // avisa para fazer backup depois de N dias sem back
 
 // Seções que entram no "Relatório (HTML)" — todas marcadas por padrão.
 const HTML_SECTIONS = [
-  { id: 'graficos', label: 'Gráficos' },
-  { id: 'geral', label: 'Geral' },
-  { id: 'semanal', label: 'Semanal' },
-  { id: 'mensal', label: 'Mensal' },
+  { id: 'graficos', label: 'Gráficos de tempo (barras)' },
+  { id: 'linha', label: 'Gráfico de linha (tendência de dias)' },
+  { id: 'geral', label: 'Geral (tabela por card)' },
+  { id: 'resumoDias', label: 'Resumo de dias (histograma)' },
+  { id: 'semanal', label: 'Semanal (tabelas)' },
+  { id: 'mensal', label: 'Mensal (tabelas)' },
   { id: 'sessoes', label: 'Por sessão' },
   { id: 'membro', label: 'Por membro' },
   // OCULTO por enquanto — reativar removendo o comentário desta linha:
   // { id: 'bonificacao', label: 'Bonificação' },
 ];
-const htmlSections = { graficos: true, geral: true, semanal: true, mensal: true, sessoes: true, membro: true, bonificacao: false };
+const htmlSections = { graficos: true, linha: true, geral: true, resumoDias: true, semanal: true, mensal: true, sessoes: true, membro: true, bonificacao: false };
 
 const fmt = (ms) => formatDuration(ms, MODEL.config.timeFormat);
 const showPaused = () => !!MODEL.config.countPauses;
@@ -403,11 +405,13 @@ function buildHtmlReport(sections) {
     .map((m) => ({ label: MODEL.memberName.get(m.memberId) || m.memberId, value: m.effectiveMs, text: fmt(m.effectiveMs) }));
 
   const lineHtml = (title, pts) => `<section class="chart chart-wide"><h3>${esc(title)}</h3>${lineChartSvg(pts)}</section>`;
-  const charts = [
+  const barCharts = [
     barsHtml('Top cards por tempo', top),
     barsHtml('Tempo por semana', weeks),
     barsHtml('Tempo por mês', months),
     MODEL.members.length ? barsHtml('Tempo por membro', byMember) : '',
+  ].join('');
+  const lineCharts = [
     lineHtml('Média de dias por semana — concluídos', avgPoints(dsum.weekly, 'semanal')),
     lineHtml('Média de dias por mês — concluídos', avgPoints(dsum.monthly, 'mensal')),
   ].join('');
@@ -502,13 +506,14 @@ function buildHtmlReport(sections) {
     }`;
 
   const body = [];
-  if (sections.graficos) body.push(`<h2>Visão geral</h2><div class="charts">${charts}</div>`);
-  if (sections.geral) body.push(`<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`
-    + `<h3>Resumo de dias — concluídos (geral)</h3><div class="daysgrid">${daysBlockHtml('Todos os concluídos', dsum.general, dsum.generalTotal, true)}</div>`);
-  if (sections.semanal) body.push(`<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`
-    + `<h3>Resumo de dias por semana — concluídos</h3>${daysSectionHtml(dsum, 'semanal')}`);
-  if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`
-    + `<h3>Resumo de dias por mês — concluídos</h3>${daysSectionHtml(dsum, 'mensal')}`);
+  if (sections.graficos) body.push(`<h2>Gráficos — tempo</h2><div class="charts">${barCharts}</div>`);
+  if (sections.linha) body.push(`<h2>Tendência de dias (média — concluídos)</h2><div class="charts">${lineCharts}</div>`);
+  if (sections.geral) body.push(`<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`);
+  if (sections.resumoDias) body.push('<h2>Resumo de dias — projetos concluídos</h2>'
+    + `<h3>Por semana</h3>${daysSectionHtml(dsum, 'semanal')}`
+    + `<h3>Por mês</h3>${daysSectionHtml(dsum, 'mensal')}`);
+  if (sections.semanal) body.push(`<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`);
+  if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`);
   if (sections.sessoes) body.push(`<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`);
   if (sections.membro && MODEL.members.length) body.push(`<h2>Por membro</h2>${tableHtml(['Membro', 'Tempo'], mRows)}`);
   if (sections.bonificacao) body.push(`<h2>Bonificação — cards concluídos por membro</h2>${bonifHtml}`);
@@ -695,33 +700,60 @@ function renderPeriods(periods, periodWord) {
   return wrap;
 }
 
-function renderPainel(r) {
-  const wrap = el('div', { class: 'tt-scroll tt-dash' });
-  const top = r.general.filter((x) => x.tracked && matchesSearch(x.card)).slice(0, 10)
-    .map((x) => ({ label: x.card, value: x.effectiveMs, text: fmt(x.effectiveMs) }));
-  wrap.appendChild(barChart('Top cards por tempo', top));
+/**
+ * MONTADOR DE RELATÓRIO (aba "Relatório"): marque as seções → preview ao vivo,
+ * idêntico ao que sai no HTML → baixar / imprimir. Respeita os filtros de
+ * membro/etiqueta do topo (o preview é gerado com buildHtmlReport, que usa os
+ * mesmos dados filtrados).
+ */
+function renderBuilder() {
+  const wrap = el('div', { class: 'tt-builder', style: 'padding:4px 2px' });
 
-  const weeks = r.weekly.slice().reverse()
-    .map((p) => ({ label: p.label.split(' · ')[0], value: p.totalMs, text: fmt(p.totalMs) }));
-  wrap.appendChild(barChart('Tempo por semana', weeks));
+  const frame = el('iframe', {
+    class: 'tt-preview-frame',
+    style: 'width:100%;height:600px;border:1px solid #dfe1e6;border-radius:8px;background:#fff;margin-top:10px',
+  });
+  const updatePreview = () => { try { frame.srcdoc = buildHtmlReport(htmlSections); } catch (e) { /* noop */ } };
 
-  const months = r.monthly.slice().reverse()
-    .map((p) => ({ label: p.label, value: p.totalMs, text: fmt(p.totalMs) }));
-  wrap.appendChild(barChart('Tempo por mês', months));
-
-  if (MODEL.members.length) {
-    const bm = timeByMember(filteredCards(), MODEL.at, MODEL.config)
-      .map((m) => ({ label: MODEL.memberName.get(m.memberId) || m.memberId, value: m.effectiveMs, text: fmt(m.effectiveMs) }));
-    wrap.appendChild(barChart('Tempo por membro', bm));
+  // checkboxes do que incluir
+  const checks = el('div', { style: 'display:flex;flex-wrap:wrap;gap:6px 16px' });
+  for (const s of HTML_SECTIONS) {
+    const chk = el('input', { type: 'checkbox' });
+    chk.checked = !!htmlSections[s.id];
+    chk.addEventListener('change', () => { htmlSections[s.id] = chk.checked; updatePreview(); });
+    checks.appendChild(el('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;color:#172b4d' }, [chk, s.label]));
   }
 
-  // Gráficos de LINHA: média de dias dos projetos concluídos (automático)
-  const ds = getDaysSummary();
-  const lines = el('div', { class: 'tt-scroll' }, [
-    lineChart('Média de dias por semana — projetos concluídos', avgPoints(ds.weekly, 'semanal')),
-    lineChart('Média de dias por mês — projetos concluídos', avgPoints(ds.monthly, 'mensal')),
-  ]);
-  return el('div', {}, [wrap, lines]);
+  const nomeArquivo = () => {
+    const chosen = HTML_SECTIONS.filter((s) => htmlSections[s.id]);
+    const tag = chosen.length === 1 ? chosen[0].id : (chosen.length === 0 ? 'vazio' : 'completo');
+    return `relatorio-${tag}-${new Date().toISOString().slice(0, 10)}.html`;
+  };
+  const btnDl = el('button', {
+    class: 'tt-btn is-primary', text: '⬇ Baixar relatório (HTML)',
+    onclick: () => {
+      const html = buildHtmlReport(htmlSections);
+      if (downloadBlob(nomeArquivo(), html, 'text/html;charset=utf-8;', false)) { flash(btnDl, 'Baixado!'); return; }
+      if (openInTab(html)) return;
+      flash(btnDl, 'Bloqueado', 2200);
+    },
+  });
+  const btnPrint = el('button', {
+    class: 'tt-btn', text: '🖨 Imprimir / PDF',
+    onclick: () => {
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+      catch (e) { const html = buildHtmlReport(htmlSections); openInTab(html); }
+    },
+  });
+
+  wrap.appendChild(el('div', { style: 'font-weight:700;color:#172b4d;margin-bottom:8px', text: 'Montar relatório — marque o que incluir:' }));
+  wrap.appendChild(checks);
+  wrap.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px' }, [btnDl, btnPrint]));
+  wrap.appendChild(el('div', { style: 'font-size:12px;color:#5e6c84;margin-top:12px', text: 'Preview (igual ao relatório final — respeita os filtros de membro/etiqueta do topo):' }));
+  wrap.appendChild(frame);
+
+  updatePreview();
+  return wrap;
 }
 
 // rótulo curto de semana ("dd/mm–dd/mm") a partir de "Semana NN · dd/mm–dd/mm"
@@ -906,13 +938,13 @@ function renderDaysGeneral() {
 
 function renderBody(r) {
   switch (activeTab) {
-    case 'painel': return renderPainel(r);
-    case 'semanal': return el('div', {}, [renderPeriods(r.weekly, 'semanal'), renderDaysSummary('semanal')]);
-    case 'mensal': return el('div', {}, [renderPeriods(r.monthly, 'mensal'), renderDaysSummary('mensal')]);
+    case 'painel': return renderBuilder();
+    case 'semanal': return renderPeriods(r.weekly, 'semanal');
+    case 'mensal': return renderPeriods(r.monthly, 'mensal');
     case 'sessoes': return renderSessoes(r);
     case 'bonificacao': return renderBonificacao();
     case 'geral':
-    default: return el('div', {}, [renderGeral(r), renderDaysGeneral()]);
+    default: return renderGeral(r);
   }
 }
 
@@ -966,42 +998,17 @@ function render() {
       flash(btnAll, ok ? 'Copiado!' : 'Falhou', 2200);
     },
   });
-  const btnHtml = el('button', {
-    class: 'tt-btn', text: 'Relatório (HTML)',
-    onclick: () => {
-      const chosen = HTML_SECTIONS.filter((s) => htmlSections[s.id]);
-      const html = buildHtmlReport(htmlSections);
-      // nome reflete a seleção: 1 seção -> nome dela; várias -> "completo"
-      const tag = chosen.length === 1 ? chosen[0].id : (chosen.length === 0 ? 'vazio' : 'completo');
-      const name = `relatorio-${tag}-${new Date().toISOString().slice(0, 10)}.html`;
-      if (downloadBlob(name, html, 'text/html;charset=utf-8;', false)) return;
-      if (openInTab(html)) return;
-      flash(btnHtml, 'Bloqueado no navegador', 2200);
-    },
-  });
   const btnCopy = el('button', {
     class: 'tt-btn', text: 'Copiar',
     onclick: async () => { const ok = await copyText(csvForTab()); flash(btnCopy, ok ? 'Copiado!' : 'Falhou'); },
   });
 
-  // caixinhas: quais seções entram no Relatório (HTML)
-  const sectionBoxes = el('div', { class: 'tt-html-sections' }, [
-    el('span', { class: 'tt-html-sections-label', text: 'Relatório HTML inclui:' }),
-    ...HTML_SECTIONS.map((s) => {
-      const chk = el('input', { type: 'checkbox' });
-      chk.checked = !!htmlSections[s.id];
-      chk.addEventListener('change', () => { htmlSections[s.id] = chk.checked; }); // sem re-render
-      return el('label', { class: 'tt-html-section' }, [chk, ' ' + s.label]);
-    }),
-  ]);
-
   const filters = el('div', { class: 'tt-report-filters' }, [memberSel, labelSel, search].filter(Boolean));
   const toolbar = el('div', { class: 'tt-report-toolbar' }, [
     el('div', { class: 'tt-report-meta' }, [summary, filters]),
-    el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv, btnAll, btnHtml]),
+    el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv, btnAll]),
   ]);
   root.appendChild(toolbar);
-  root.appendChild(sectionBoxes);
   root.appendChild(backupBar());
 
   root.appendChild(el('div', { class: 'tt-tabs' }, TABS.map((tab) => el('button', {
