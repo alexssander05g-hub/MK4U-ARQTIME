@@ -40,6 +40,8 @@ let activeTab = 'geral';
 let includeUntracked = true; // mostra cards em fila (sem tempo) por padrão, com sua idade
 let selectedMemberId = '';
 let selectedLabelId = '';
+let listFilter = null; // null = todas as listas; senão Set de idList incluídos
+let listOpen = false;  // painel de seleção de listas aberto?
 let searchText = '';
 let bonifMonth = ''; // mês selecionado na aba Bonificação
 let daysPeriodSel = { semanal: null, mensal: null }; // período escolhido no Resumo de dias ('__all__' = todos)
@@ -72,13 +74,20 @@ const matchesSearch = (name) => !searchText || name.toLowerCase().includes(searc
 function filteredCards() {
   return MODEL.allCards.filter((c) =>
     (!selectedMemberId || c.memberIds.has(selectedMemberId)) &&
-    (!selectedLabelId || c.labelIds.has(selectedLabelId)));
+    (!selectedLabelId || c.labelIds.has(selectedLabelId)) &&
+    (!listFilter || listFilter.has(c.idList)));
+}
+
+/** Chave de cache dos filtros (membro + etiqueta + listas). */
+function filterKey() {
+  const listKey = listFilter ? Array.from(listFilter).sort().join(',') : 'all';
+  return `${selectedMemberId}|${selectedLabelId}|${listKey}`;
 }
 
 let _cacheKey = null;
 let _cacheReport = null;
 function getReport() {
-  const key = `${selectedMemberId}|${selectedLabelId}`;
+  const key = filterKey();
   if (_cacheReport && _cacheKey === key) return _cacheReport;
   _cacheReport = buildReport(
     filteredCards().map((c) => ({
@@ -94,7 +103,7 @@ function getReport() {
 let _cacheDaysKey = null;
 let _cacheDays = null;
 function getDaysSummary() {
-  const key = `${selectedMemberId}|${selectedLabelId}`;
+  const key = filterKey();
   if (_cacheDays && _cacheDaysKey === key) return _cacheDays;
   _cacheDays = daysSummary(
     filteredCards().map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity })),
@@ -961,6 +970,51 @@ function selectFilter(placeholder, options, selected, onChange) {
   return sel;
 }
 
+/** Filtro de LISTAS (várias, com checkboxes). null = todas (sem filtro). */
+function listFilterRow() {
+  const lists = (MODEL && MODEL.lists) || [];
+  if (!lists.length) return el('div', { style: 'display:none' });
+  const total = lists.length;
+  const selCount = listFilter ? listFilter.size : total;
+  const row = el('div', { style: 'margin:6px 0' });
+  const btn = el('button', {
+    class: 'tt-select', style: 'cursor:pointer',
+    text: `Listas: ${selCount}/${total} ${listOpen ? '▴' : '▾'}`,
+    onclick: () => { listOpen = !listOpen; render(); },
+  });
+  row.appendChild(btn);
+
+  if (listOpen) {
+    const checks = [];
+    const panel = el('div', { style: 'margin-top:6px;border:1px solid #dfe1e6;border-radius:8px;padding:10px;max-width:420px;background:#fafbfc' });
+    panel.appendChild(el('div', { style: 'display:flex;gap:8px;margin-bottom:8px' }, [
+      el('button', { type: 'button', class: 'tt-btn', text: 'Marcar todas', onclick: () => checks.forEach((c) => { c.checked = true; }) }),
+      el('button', { type: 'button', class: 'tt-btn', text: 'Limpar', onclick: () => checks.forEach((c) => { c.checked = false; }) }),
+    ]));
+    const grid = el('div', { style: 'display:flex;flex-direction:column;gap:2px;max-height:220px;overflow:auto' });
+    for (const l of lists) {
+      const c = el('input', { type: 'checkbox' });
+      c.checked = !listFilter || listFilter.has(l.id);
+      c.dataset.listId = l.id;
+      checks.push(c);
+      grid.appendChild(el('label', { style: 'display:flex;align-items:center;gap:8px;font-size:13px;color:#172b4d;padding:2px' }, [c, l.name]));
+    }
+    panel.appendChild(grid);
+    panel.appendChild(el('button', {
+      type: 'button', class: 'tt-btn is-primary', style: 'margin-top:8px',
+      text: 'Aplicar filtro de listas',
+      onclick: () => {
+        const checked = checks.filter((c) => c.checked).map((c) => c.dataset.listId);
+        listFilter = (checked.length === lists.length) ? null : new Set(checked);
+        listOpen = false;
+        render();
+      },
+    }));
+    row.appendChild(panel);
+  }
+  return row;
+}
+
 function render() {
   const root = document.getElementById('app');
   clear(root);
@@ -1009,6 +1063,7 @@ function render() {
     el('div', { class: 'tt-report-actions' }, [btnCopy, btnCsv, btnAll]),
   ]);
   root.appendChild(toolbar);
+  root.appendChild(listFilterRow());
   root.appendChild(backupBar());
 
   root.appendChild(el('div', { class: 'tt-tabs' }, TABS.map((tab) => el('button', {
@@ -1081,7 +1136,7 @@ async function boot() {
       for (const m of members) { memberIds.add(m.id); if (!memberName.has(m.id)) memberName.set(m.id, m.fullName || m.username || m.id); }
       for (const l of labels) { labelIds.add(l.id); if (!labelName.has(l.id)) labelName.set(l.id, l.name || `(cor ${l.color || '—'})`); }
       return {
-        id: c.id,
+        id: c.id, idList: c.idList,
         name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null),
         memberIds, labelIds, createdAt: creationMsFromId(c.id),
         dueComplete: !!c.dueComplete, dateLastActivity: c.dateLastActivity || null,
@@ -1091,7 +1146,11 @@ async function boot() {
     const members = Array.from(memberName, ([id, name]) => ({ id, name })).sort(byName);
     const labels = Array.from(labelName, ([id, name]) => ({ id, name })).sort(byName);
 
-    MODEL = { allCards, members, labels, memberName, config, at: now(), boardId: board && board.id ? board.id : '', boardName: board && board.name ? board.name : '' };
+    MODEL = {
+      allCards, members, labels, memberName, config, at: now(),
+      lists: lists.map((l) => ({ id: l.id, name: l.name })),
+      boardId: board && board.id ? board.id : '', boardName: board && board.name ? board.name : '',
+    };
     render();
   } catch (e) {
     clear(root);
