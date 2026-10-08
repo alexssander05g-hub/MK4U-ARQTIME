@@ -42,6 +42,7 @@ let selectedMemberId = '';
 let selectedLabelId = '';
 let searchText = '';
 let bonifMonth = ''; // mês selecionado na aba Bonificação
+let daysPeriodSel = { semanal: null, mensal: null }; // período escolhido no Resumo de dias ('__all__' = todos)
 let sortState = { col: null, dir: 'desc' };
 let keepFocus = false;
 let restorePending = null; // backup carregado aguardando confirmação do usuário
@@ -783,18 +784,40 @@ function daysSummaryBlock(headLabel, dist, total, isGeral) {
   return card;
 }
 
-/** Bloco "Resumo de dias" para a aba de período (semanal/mensal): por período + geral. */
+/** Bloco "Resumo de dias" para a aba de período (semanal/mensal): seletor + período + geral. */
 function renderDaysSummary(kind) {
   const ds = getDaysSummary();
   const periods = kind === 'semanal' ? ds.weekly : ds.monthly;
-  const grid = el('div', { class: 'tt-days-grid' });
-  if (!periods.length) grid.appendChild(el('div', { class: 'tt-days-empty', text: 'Nenhum projeto concluído no período.' }));
-  for (const p of periods) grid.appendChild(daysSummaryBlock(p.label, p.dist, p.total, false));
-  grid.appendChild(daysSummaryBlock('Geral — todos os concluídos', ds.general, ds.generalTotal, true));
-  return el('div', { class: 'tt-days-wrap' }, [
-    el('div', { class: 'tt-days-title', text: 'Resumo de dias — projetos concluídos (idade em dias úteis)' }),
-    grid,
+  const keys = periods.map((p) => p.key);
+
+  // resolve a seleção: default = período mais recente (periods já vêm desc)
+  let sel = daysPeriodSel[kind];
+  if (sel == null || (sel !== '__all__' && !keys.includes(sel))) sel = keys[0] || '__all__';
+  daysPeriodSel[kind] = sel;
+
+  const select = el('select', { class: 'tt-select' });
+  select.appendChild(el('option', { value: '__all__', text: kind === 'semanal' ? 'Todas as semanas' : 'Todos os meses' }));
+  for (const p of periods) {
+    const o = el('option', { value: p.key, text: p.label });
+    if (p.key === sel) o.selected = true;
+    select.appendChild(o);
+  }
+  select.value = sel;
+  select.addEventListener('change', () => { daysPeriodSel[kind] = select.value; render(); });
+
+  const header = el('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px' }, [
+    el('div', { class: 'tt-days-title', style: 'margin:0', text: 'Resumo de dias — projetos concluídos (idade em dias úteis)' }),
+    el('label', { style: 'font-size:12px;color:#5e6c84;display:flex;align-items:center;gap:6px' },
+      [kind === 'semanal' ? 'Semana:' : 'Mês:', select]),
   ]);
+
+  const shown = sel === '__all__' ? periods : periods.filter((p) => p.key === sel);
+  const grid = el('div', { class: 'tt-days-grid' });
+  if (!shown.length) grid.appendChild(el('div', { class: 'tt-days-empty', text: 'Nenhum projeto concluído no período.' }));
+  for (const p of shown) grid.appendChild(daysSummaryBlock(p.label, p.dist, p.total, false));
+  grid.appendChild(daysSummaryBlock('Geral — todos os concluídos', ds.general, ds.generalTotal, true));
+
+  return el('div', { class: 'tt-days-wrap' }, [header, grid]);
 }
 
 /** Só o bloco geral — usado no fim da aba Geral. */
