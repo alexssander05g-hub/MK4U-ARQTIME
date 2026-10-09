@@ -237,11 +237,10 @@ export function daysSummary(cards, at, config) {
   const months = new Map();
 
   for (const c of cards) {
-    if (!c || !c.dueComplete) continue; // só concluídos (checkbox nativo)
-    const age = cardDays(c.createdAt, c, at, config);
+    const compMs = c && Number.isFinite(c.completedAt) ? c.completedAt : NaN; // data REAL carimbada
+    if (!Number.isFinite(compMs)) continue; // só concluídos (com data real)
+    const age = ageDaysTo(c.createdAt, compMs, config);
     bump(general, age);
-    const compMs = c.dateLastActivity != null ? new Date(c.dateLastActivity).getTime() : NaN;
-    if (!Number.isFinite(compMs)) continue;
     const wk = isoWeekKey(compMs);
     if (!weeks.has(wk)) weeks.set(wk, { key: wk, label: weekLabel(compMs), ts: mondayOf(compMs).getTime(), dist: new Map(), total: 0 });
     const w = weeks.get(wk); bump(w.dist, age); w.total += 1;
@@ -264,6 +263,14 @@ export function daysSummary(cards, at, config) {
     weekly: finalize(weeks),
     monthly: finalize(months),
   };
+}
+
+/** Idade em dias úteis entre a criação (dia 0) e a conclusão (endMs). */
+function ageDaysTo(createdAtMs, endMs, config) {
+  if (createdAtMs == null || !Number.isFinite(endMs)) return 0;
+  const bd = (config && config.business && config.business.days) || DEFAULT_DAYS;
+  const start = new Date(createdAtMs); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() + 1);
+  return businessDayKeys(start.getTime(), endMs, bd).length;
 }
 
 /** Índice da semana DENTRO do mês (1, 2, 3…), contando a partir da semana que contém o dia 1. */
@@ -289,10 +296,9 @@ export function daysSummaryMonth(cards, at, config) {
   const weeks = new Map(); // weekKey -> {key, monMs, dist, total}
 
   for (const c of cards) {
-    if (!c || !c.dueComplete) continue;
-    const compMs = c.dateLastActivity != null ? new Date(c.dateLastActivity).getTime() : NaN;
-    if (!Number.isFinite(compMs) || monthKey(compMs) !== curMonth) continue; // só o mês atual
-    const age = cardDays(c.createdAt, c, at, config);
+    const compMs = c && Number.isFinite(c.completedAt) ? c.completedAt : NaN; // data REAL carimbada
+    if (!Number.isFinite(compMs) || monthKey(compMs) !== curMonth) continue; // só concluídos no mês atual
+    const age = ageDaysTo(c.createdAt, compMs, config);
     bump(monthDist, age);
     const wk = isoWeekKey(compMs);
     if (!weeks.has(wk)) weeks.set(wk, { key: wk, monMs: mondayOf(compMs).getTime(), dist: new Map(), total: 0 });
@@ -344,8 +350,7 @@ export function labelCounts(cards, at, keyLabels) {
   };
   const counts = keyLabels.map((k) => ({ key: k, count: 0 }));
   for (const c of cards) {
-    if (!c || !c.dueComplete) continue;
-    const compMs = c.dateLastActivity != null ? new Date(c.dateLastActivity).getTime() : NaN;
+    const compMs = c && Number.isFinite(c.completedAt) ? c.completedAt : NaN; // data REAL carimbada
     if (!Number.isFinite(compMs) || monthKey(compMs) !== curMonth) continue;
     const labels = Array.isArray(c.labels) ? c.labels : [];
     for (let i = 0; i < keyLabels.length; i++) {
