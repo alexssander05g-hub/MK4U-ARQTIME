@@ -425,14 +425,15 @@ function buildHtmlReport(sections) {
     lineHtml('Média de dias por mês — concluídos', avgPoints(dsum.monthly, 'mensal')),
   ].join('');
 
-  // tabela Geral (inclui cards em fila, com sua idade em dias)
+  // tabela Geral — respeita "Incluir cards sem tempo"
+  const gGeneral = includeUntracked ? r.general : r.general.filter((x) => x.tracked);
   const gHead = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
-  const gRows = r.general.map((x) => [
+  const gRows = gGeneral.map((x) => [
     x.card, x.lista, STATUS_LABEL[x.status],
     x.inicio ? formatDateTime(x.inicio) : '—', x.conclusao ? formatDateTime(x.conclusao) : '—',
     x.days, x.sessions, ...(paused ? [fmt(x.pausedMs)] : []), fmt(x.effectiveMs),
   ]);
-  const gTotal = r.general.reduce((a, x) => a + x.effectiveMs, 0);
+  const gTotal = gGeneral.reduce((a, x) => a + x.effectiveMs, 0);
   const gFoot = ['Total', '', '', '', '', '', '', ...(paused ? [''] : []), fmt(gTotal)];
 
   // períodos
@@ -755,8 +756,15 @@ function renderBuilder() {
     },
   });
 
+  const chkUntracked = el('input', { type: 'checkbox' });
+  chkUntracked.checked = includeUntracked;
+  chkUntracked.addEventListener('change', () => { includeUntracked = chkUntracked.checked; updatePreview(); });
+  const untrackedLabel = el('label', { style: 'display:flex;align-items:center;gap:6px;font-size:13px;color:#172b4d;margin-top:10px' },
+    [chkUntracked, 'Incluir cards sem tempo (na seção Geral)']);
+
   wrap.appendChild(el('div', { style: 'font-weight:700;color:#172b4d;margin-bottom:8px', text: 'Montar relatório — marque o que incluir:' }));
   wrap.appendChild(checks);
+  wrap.appendChild(untrackedLabel);
   wrap.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px' }, [btnDl, btnPrint]));
   wrap.appendChild(el('div', { style: 'font-size:12px;color:#5e6c84;margin-top:12px', text: 'Preview (igual ao relatório final — respeita os filtros de membro/etiqueta do topo):' }));
   wrap.appendChild(frame);
