@@ -13,7 +13,7 @@
  */
 
 import { getConfig, saveConfig, saveCardStateById } from '../services/storage.js';
-import { normalize, Status } from '../services/tracker.js';
+import { normalize, Status, computeTotals } from '../services/tracker.js';
 import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor, daysSummary, daysSummaryMonth, labelCounts } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
@@ -95,6 +95,22 @@ function filterKey() {
   return `${selectedMemberId}|${selectedLabelId}|${listKey}`;
 }
 
+/**
+ * Data REAL de conclusão de um card (ms), ou null se não concluído.
+ * Prioriza o carimbo gravado pelo Power-Up (state.completedAt); se não houver,
+ * usa o fim real do tracker (lastEnd) quando o card foi finalizado por ele.
+ * NÃO usa mais dateLastActivity (que se movia a cada atividade e inflava a conta).
+ */
+function completedMs(c) {
+  const st = c && c.state;
+  if (st && Number.isFinite(st.completedAt)) return st.completedAt;
+  if (st && st.status === Status.DONE) {
+    const le = computeTotals(st, MODEL.at, MODEL.config).lastEnd;
+    if (Number.isFinite(le)) return le;
+  }
+  return null;
+}
+
 let _cacheKey = null;
 let _cacheReport = null;
 function getReport() {
@@ -117,7 +133,7 @@ function getDaysSummary() {
   const key = filterKey();
   if (_cacheDays && _cacheDaysKey === key) return _cacheDays;
   _cacheDays = daysSummary(
-    filteredCards().map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity })),
+    filteredCards().map((c) => ({ createdAt: c.createdAt, completedAt: completedMs(c) })),
     MODEL.at, MODEL.config,
   );
   _cacheDaysKey = key;
@@ -130,7 +146,7 @@ function getDaysSummaryMonth() {
   const key = filterKey();
   if (_cacheDM && _cacheDMKey === key) return _cacheDM;
   _cacheDM = daysSummaryMonth(
-    filteredCards().map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity })),
+    filteredCards().map((c) => ({ createdAt: c.createdAt, completedAt: completedMs(c) })),
     MODEL.at, MODEL.config,
   );
   _cacheDMKey = key;
@@ -1060,7 +1076,7 @@ const prettyLabel = (k) => { const t = String(k || '').trim(); return t.length <
 
 /** Todos os cards do quadro (o relatório final não usa os filtros de tela). */
 function finalCards() {
-  return MODEL.allCards.map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity, labels: c.labelNames }));
+  return MODEL.allCards.map((c) => ({ createdAt: c.createdAt, completedAt: completedMs(c), labels: c.labelNames }));
 }
 
 function buildFinalHtml() {
@@ -1073,9 +1089,12 @@ function buildFinalHtml() {
     : '<p class="muted">Nenhum projeto concluído neste mês ainda.</p>';
   const labRows = labs.map((l) => `<tr><td>${esc(prettyLabel(l.key))}</td><td class="n"><b>${l.count}</b></td></tr>`).join('');
   const style = `
+    @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&display=swap');
     *{box-sizing:border-box}
     body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#172b4d;margin:0 auto;padding:24px;max-width:860px;background:#fff}
-    h1{font-size:20px;margin:0 0 4px}
+    .logo{font-family:'Baloo 2','Trebuchet MS',system-ui,sans-serif;font-weight:800;font-size:38px;letter-spacing:-.5px;line-height:1;margin-bottom:8px}
+    .logo .m{color:#98c830}.logo .u{color:#111}
+    h1{font-size:18px;margin:0 0 4px}
     h2{font-size:15px;margin:24px 0 8px;border-bottom:2px solid #dfe1e6;padding-bottom:4px}
     h3{font-size:13px;margin:14px 0 6px;color:#42526e}
     .meta{color:#6b778c;font-size:12px;margin-bottom:8px}
@@ -1093,6 +1112,7 @@ function buildFinalHtml() {
     tfoot td{font-weight:700;background:#fafbfc}
     @media print{.daysc,table{page-break-inside:avoid}}`;
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Final</title><style>${style}</style></head><body>`
+    + '<div class="logo"><span class="m">market</span><span class="u">4u</span></div>'
     + `<h1>Relatório Final${MODEL.boardName ? ' — ' + esc(MODEL.boardName) : ''}</h1>`
     + `<div class="meta">${esc(dsm.month.label)} · gerado em ${esc(formatDateTime(now()))}</div>`
     + `<h2>Resumo de dias — por semana (mês atual)</h2><div class="daysgrid">${weekBlocks}</div>`
