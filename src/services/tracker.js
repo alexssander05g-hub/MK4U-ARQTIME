@@ -53,6 +53,7 @@ export function initState() {
     session: null,
     sessions: [],
     history: [],
+    completedAt: null, // data REAL de conclusão (carimbada 1x; congela). null = não concluído
   };
 }
 
@@ -66,6 +67,7 @@ export function normalize(raw) {
   s.sessions = Array.isArray(raw.sessions) ? raw.sessions : [];
   s.history = Array.isArray(raw.history) ? raw.history : [];
   s.session = raw.session && typeof raw.session === 'object' ? raw.session : null;
+  s.completedAt = Number.isFinite(raw.completedAt) ? raw.completedAt : null;
   // Ponto de migração: if (raw.v < SCHEMA_VERSION) { ... }
   s.v = SCHEMA_VERSION;
   return s;
