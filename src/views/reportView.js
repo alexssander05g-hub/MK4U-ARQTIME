@@ -14,7 +14,7 @@
 
 import { getConfig, saveConfig, saveCardStateById } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
-import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor, daysSummary, daysSummaryMonth } from '../services/report.js';
+import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor, daysSummary, daysSummaryMonth, labelCounts } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
 import { el, clear } from '../utils/dom.js';
@@ -45,6 +45,17 @@ let listOpen = false;  // painel de seleção de listas aberto?
 let searchText = '';
 let bonifMonth = ''; // mês selecionado na aba Bonificação
 let daysPeriodSel = { semanal: null, mensal: null }; // período escolhido no Resumo de dias ('__all__' = todos)
+let viewMode = 'detalhada'; // 'detalhada' (tudo) | 'final' (só o relatório final programado)
+
+// Etiquetas-chave do RELATÓRIO FINAL (quantitativo por etiqueta). Fácil de editar/ampliar.
+const KPI_LABELS = [
+  'alteração de prospecção própria',
+  'rj',
+  'sp',
+  'nacional',
+  'container',
+  'franqueado pagante',
+];
 let sortState = { col: null, dir: 'desc' };
 let keepFocus = false;
 let restorePending = null; // backup carregado aguardando confirmação do usuário
@@ -1043,9 +1054,102 @@ function listFilterRow() {
   return row;
 }
 
+// -- RELATÓRIO FINAL (conteúdo fixo, sem seleção) --------------------------
+
+const prettyLabel = (k) => { const t = String(k || '').trim(); return t.length <= 3 ? t.toUpperCase() : t.charAt(0).toUpperCase() + t.slice(1); };
+
+/** Todos os cards do quadro (o relatório final não usa os filtros de tela). */
+function finalCards() {
+  return MODEL.allCards.map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity, labels: c.labelNames }));
+}
+
+function buildFinalHtml() {
+  const cards = finalCards();
+  const dsm = daysSummaryMonth(cards, MODEL.at, MODEL.config);
+  const labs = labelCounts(cards, MODEL.at, KPI_LABELS);
+  const totalLab = labs.reduce((s, l) => s + l.count, 0);
+  const weekBlocks = dsm.weeks.length
+    ? dsm.weeks.map((w) => daysBlockHtml(w.label, w.dist, w.total, false)).join('')
+    : '<p class="muted">Nenhum projeto concluído neste mês ainda.</p>';
+  const labRows = labs.map((l) => `<tr><td>${esc(prettyLabel(l.key))}</td><td class="n"><b>${l.count}</b></td></tr>`).join('');
+  const style = `
+    *{box-sizing:border-box}
+    body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#172b4d;margin:0 auto;padding:24px;max-width:860px;background:#fff}
+    h1{font-size:20px;margin:0 0 4px}
+    h2{font-size:15px;margin:24px 0 8px;border-bottom:2px solid #dfe1e6;padding-bottom:4px}
+    h3{font-size:13px;margin:14px 0 6px;color:#42526e}
+    .meta{color:#6b778c;font-size:12px;margin-bottom:8px}
+    .muted{color:#6b778c;font-size:12px}
+    .daysgrid{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0 10px}
+    .daysc{border:1px solid #dfe1e6;border-radius:8px;padding:10px 12px;min-width:160px}
+    .daysc.geral{background:#f4f9ff;border-color:#b3d4ff}
+    .daysh{font-weight:700;font-size:12px;margin-bottom:6px}
+    .daysr{display:flex;justify-content:space-between;gap:16px;font-size:12px;padding:2px 0}
+    .daysr.dayst{border-top:1px solid #dfe1e6;margin-top:5px;padding-top:5px;font-weight:700}
+    table{border-collapse:collapse;font-size:13px;min-width:320px;margin-top:4px}
+    th,td{border:1px solid #dfe1e6;padding:6px 10px;text-align:left}
+    th{background:#f4f5f7;color:#42526e;font-size:11px;text-transform:uppercase}
+    td.n{text-align:right;font-variant-numeric:tabular-nums}
+    tfoot td{font-weight:700;background:#fafbfc}
+    @media print{.daysc,table{page-break-inside:avoid}}`;
+  return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Relatório Final</title><style>${style}</style></head><body>`
+    + `<h1>Relatório Final${MODEL.boardName ? ' — ' + esc(MODEL.boardName) : ''}</h1>`
+    + `<div class="meta">${esc(dsm.month.label)} · gerado em ${esc(formatDateTime(now()))}</div>`
+    + `<h2>Resumo de dias — por semana (mês atual)</h2><div class="daysgrid">${weekBlocks}</div>`
+    + `<h3>Total do mês</h3><div class="daysgrid">${daysBlockHtml('Total — ' + dsm.month.label, dsm.month.dist, dsm.month.total, true)}</div>`
+    + `<h2>Projetos concluídos por etiqueta (mês atual)</h2>`
+    + `<table><thead><tr><th>Etiqueta</th><th class="n">Projetos</th></tr></thead><tbody>${labRows}</tbody>`
+    + `<tfoot><tr><td>Total</td><td class="n">${totalLab}</td></tr></tfoot></table>`
+    + '</body></html>';
+}
+
+function renderFinal() {
+  const wrap = el('div', { style: 'padding:4px 2px' });
+  const frame = el('iframe', { style: 'width:100%;height:640px;border:1px solid #dfe1e6;border-radius:8px;background:#fff;margin-top:10px' });
+  frame.srcdoc = buildFinalHtml();
+  const btnDl = el('button', {
+    class: 'tt-btn is-primary', text: '⬇ Baixar relatório final (HTML)',
+    onclick: () => {
+      const html = buildFinalHtml();
+      const name = `relatorio-final-${new Date().toISOString().slice(0, 10)}.html`;
+      if (downloadBlob(name, html, 'text/html;charset=utf-8;', false)) { flash(btnDl, 'Baixado!'); return; }
+      if (openInTab(html)) return;
+      flash(btnDl, 'Bloqueado', 2200);
+    },
+  });
+  const btnPrint = el('button', {
+    class: 'tt-btn', text: '🖨 Imprimir / PDF',
+    onclick: () => { try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { openInTab(buildFinalHtml()); } },
+  });
+  wrap.appendChild(el('div', { style: 'font-size:12px;color:#5e6c84;margin-bottom:6px', text: 'Relatório final — conteúdo fixo: resumo de dias do mês (por semana) + projetos concluídos por etiqueta.' }));
+  wrap.appendChild(el('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [btnDl, btnPrint]));
+  wrap.appendChild(frame);
+  return wrap;
+}
+
+/** Dois botões no topo: Detalhada (tudo) × Relatório final (fixo). */
+function modeSwitch() {
+  const mk = (id, label) => el('button', {
+    class: `tt-btn${viewMode === id ? ' is-primary' : ''}`,
+    style: 'font-size:14px;padding:8px 16px',
+    text: label,
+    onclick: () => { if (viewMode !== id) { viewMode = id; render(); } },
+  });
+  return el('div', { style: 'display:flex;gap:8px;margin-bottom:12px' }, [
+    mk('detalhada', '📋 Detalhada'),
+    mk('final', '⭐ Relatório final'),
+  ]);
+}
+
 function render() {
   const root = document.getElementById('app');
   clear(root);
+  root.appendChild(modeSwitch());
+  if (viewMode === 'final') {
+    root.appendChild(renderFinal());
+    t.sizeTo('#app').catch(() => {});
+    return;
+  }
   const r = getReport();
 
   const summary = el('div', {
