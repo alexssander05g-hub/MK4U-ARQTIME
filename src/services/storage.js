@@ -96,10 +96,27 @@ export async function apply(t, op) {
 export async function reconcileAndPersist(t, config) {
   const [state, card] = await Promise.all([
     getState(t),
-    t.card('idList', 'dateLastActivity'),
+    t.card('idList', 'dateLastActivity', 'dueComplete'),
   ]);
   const at = card && card.dateLastActivity ? new Date(card.dateLastActivity).getTime() : now();
-  const { state: next, changed } = reconcile(state, card && card.idList, config, at);
+  let { state: next, changed } = reconcile(state, card && card.idList, config, at);
+
+  // CARIMBO da data real de conclusão: a 1ª vez que vemos o card concluído
+  // (checkbox nativo marcado, OU finalizado pelo nosso tracker), gravamos a data
+  // e ela CONGELA — nunca mais muda (diferente do dateLastActivity, que se move).
+  const isDone = !!(card && card.dueComplete) || next.status === 'done';
+  if (isDone && next.completedAt == null) {
+    const totals = computeTotals(next, now(), config);
+    // melhor fonte: fim real do tracker; senão a última atividade (≈ momento da conclusão)
+    const when = Number.isFinite(totals.lastEnd) ? totals.lastEnd : at;
+    next = { ...next, completedAt: when };
+    changed = true;
+  } else if (!isDone && next.completedAt != null) {
+    // reabriu o card (desmarcou o concluído e tirou da lista de fim): limpa o carimbo
+    next = { ...next, completedAt: null };
+    changed = true;
+  }
+
   if (changed) await saveState(t, next);
   return next;
 }
