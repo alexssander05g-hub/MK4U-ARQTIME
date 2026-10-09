@@ -92,7 +92,7 @@ function getReport() {
   _cacheReport = buildReport(
     filteredCards().map((c) => ({
       name: c.name, lista: c.lista, state: c.state, createdAt: c.createdAt,
-      dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity,
+      dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity, labels: c.labelNames,
     })),
     MODEL.at, MODEL.config,
   );
@@ -139,10 +139,10 @@ function csvForTab(tabId = activeTab) {
   const r = getReport();
   const paused = showPaused();
   if (tabId === 'geral') {
-    const head = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões',
+    const head = ['Card', 'Lista', 'Etiquetas', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões',
       ...(paused ? ['Pausado'] : []), 'Tempo efetivo', 'Tempo (ms)'];
     const rows = (includeUntracked ? r.general : r.general.filter((x) => x.tracked)).map((x) => [
-      x.card, x.lista, STATUS_LABEL[x.status],
+      x.card, x.lista, (x.labels || []).join(', '), STATUS_LABEL[x.status],
       x.inicio ? formatDateTime(x.inicio) : '', x.conclusao ? formatDateTime(x.conclusao) : '',
       x.days, x.sessions, ...(paused ? [fmt(x.pausedMs)] : []), fmt(x.effectiveMs), x.effectiveMs,
     ]);
@@ -427,14 +427,14 @@ function buildHtmlReport(sections) {
 
   // tabela Geral — respeita "Incluir cards sem tempo"
   const gGeneral = includeUntracked ? r.general : r.general.filter((x) => x.tracked);
-  const gHead = ['Card', 'Lista', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
+  const gHead = ['Card', 'Lista', 'Etiquetas', 'Status', 'Início', 'Conclusão', 'Idade (dias)', 'Sessões', ...(paused ? ['Pausado'] : []), 'Tempo'];
   const gRows = gGeneral.map((x) => [
-    x.card, x.lista, STATUS_LABEL[x.status],
+    x.card, x.lista, (x.labels || []).join(', '), STATUS_LABEL[x.status],
     x.inicio ? formatDateTime(x.inicio) : '—', x.conclusao ? formatDateTime(x.conclusao) : '—',
     x.days, x.sessions, ...(paused ? [fmt(x.pausedMs)] : []), fmt(x.effectiveMs),
   ]);
   const gTotal = gGeneral.reduce((a, x) => a + x.effectiveMs, 0);
-  const gFoot = ['Total', '', '', '', '', '', '', ...(paused ? [''] : []), fmt(gTotal)];
+  const gFoot = ['Total', '', '', '', '', '', '', '', ...(paused ? [''] : []), fmt(gTotal)];
 
   // períodos
   const periodTables = (periods, word) => (periods.length
@@ -491,7 +491,7 @@ function buildHtmlReport(sections) {
     th,td{border:1px solid #dfe1e6;padding:5px 8px;text-align:left}
     th{background:#f4f5f7;color:#42526e;font-size:11px;text-transform:uppercase;letter-spacing:.3px}
     tfoot td{font-weight:700;background:#fafbfc}
-    td:nth-child(n+6){text-align:right;font-variant-numeric:tabular-nums}
+    td:nth-child(n+7){text-align:right;font-variant-numeric:tabular-nums}
     .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px}
     .chart-wide{grid-column:1 / -1}
     .chart h3{margin-top:0}
@@ -651,16 +651,17 @@ function renderGeral(r) {
   const totalPaused = rows.reduce((a, x) => a + x.pausedMs, 0);
   const body = rows.map((x) => el('tr', {}, [
     td(x.card, 'tt-td-card'), td(x.lista),
+    td((x.labels && x.labels.length) ? x.labels.join(', ') : '—'),
     el('td', {}, statusChip(x.status)),
     td(x.inicio ? formatDateTime(x.inicio) : '—', 'nowrap'),
     td(x.conclusao ? formatDateTime(x.conclusao) : '—', 'nowrap'),
     td(String(x.days), 'num'), td(String(x.sessions), 'num'),
     ...(paused ? [td(fmt(x.pausedMs), 'num')] : []), td(fmt(x.effectiveMs), 'num'),
   ]));
-  const foot = [td('Total'), td(''), td(''), td(''), td(''), td('', 'num'), td('', 'num'),
+  const foot = [td('Total'), td(''), td(''), td(''), td(''), td(''), td('', 'num'), td('', 'num'),
     ...(paused ? [td(fmt(totalPaused), 'num')] : []), td(fmt(totalMs), 'num')];
   const head = [
-    sortableTh('Card', 'card'), sortableTh('Lista', 'lista'), th('Status'),
+    sortableTh('Card', 'card'), sortableTh('Lista', 'lista'), th('Etiquetas'), th('Status'),
     th('Início'), th('Conclusão'),
     sortableTh('Idade (dias)', 'dias', 'num'), sortableTh('Sessões', 'sessoes', 'num'),
     ...(paused ? [sortableTh('Pausado', 'pausado', 'num')] : []), sortableTh('Tempo', 'tempo', 'num'),
@@ -1146,7 +1147,9 @@ async function boot() {
       return {
         id: c.id, idList: c.idList,
         name: c.name, lista: listName.get(c.idList) || '—', state: normalize(states[i] || null),
-        memberIds, labelIds, createdAt: creationMsFromId(c.id),
+        memberIds, labelIds,
+        labelNames: labels.map((l) => (l.name && l.name.trim() ? l.name : `(${l.color || 'sem cor'})`)),
+        createdAt: creationMsFromId(c.id),
         dueComplete: !!c.dueComplete, dateLastActivity: c.dateLastActivity || null,
       };
     });
