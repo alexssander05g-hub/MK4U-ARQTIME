@@ -300,16 +300,59 @@ export function daysSummaryMonth(cards, at, config) {
   }
 
   const toSorted = (m) => Array.from(m.entries()).map(([days, count]) => ({ days: Number(days), count })).sort((a, b) => a.days - b.days);
+  // A semana 1 começa nos PRIMEIROS DIAS DO MÊS (não no mês anterior): o rótulo
+  // é "cortado" nas bordas do mês — início nunca antes do dia 1, fim nunca depois
+  // do último dia do mês.
+  const dAt = new Date(at);
+  const firstOfMonth = new Date(dAt.getFullYear(), dAt.getMonth(), 1).getTime();
+  const lastOfMonth = new Date(dAt.getFullYear(), dAt.getMonth() + 1, 0).getTime();
   const weekArr = Array.from(weeks.values()).sort((a, b) => a.monMs - b.monMs).map((w) => {
-    const mon = new Date(w.monMs); const fri = new Date(w.monMs); fri.setDate(fri.getDate() + 4);
+    const friDate = new Date(w.monMs); friDate.setDate(friDate.getDate() + 4);
+    const start = new Date(Math.max(w.monMs, firstOfMonth));
+    const end = new Date(Math.min(friDate.getTime(), lastOfMonth));
     const idx = weekOfMonthIndex(w.monMs, at);
-    return { key: w.key, label: `Semana ${idx} · ${dm.format(mon)}–${dm.format(fri)}`, weekOfMonth: idx, dist: toSorted(w.dist), total: w.total };
+    return { key: w.key, label: `Semana ${idx} · ${dm.format(start)}–${dm.format(end)}`, weekOfMonth: idx, dist: toSorted(w.dist), total: w.total };
   });
 
   return {
     month: { key: curMonth, label: monthLabel(at), dist: toSorted(monthDist), total: Array.from(monthDist.values()).reduce((s, n) => s + n, 0) },
     weeks: weekArr,
   };
+}
+
+/**
+ * QUANTITATIVO POR ETIQUETA — quantos projetos CONCLUÍDOS no mês atual têm cada
+ * etiqueta-chave. Um card conta em todas as etiquetas-chave que ele tiver.
+ * O casamento de nome é tolerante a acento/caixa: igual, ou a chave aparece como
+ * palavra inteira no nome da etiqueta (chaves com 5+ letras também casam por "contém").
+ *
+ * @param {{dueComplete?:boolean, dateLastActivity?:string|number, labels?:string[]}[]} cards
+ * @param {number} at
+ * @param {string[]} keyLabels  nomes das etiquetas a contar, na ordem desejada
+ * @returns {{key:string, count:number}[]}
+ */
+export function labelCounts(cards, at, keyLabels) {
+  const curMonth = monthKey(at);
+  const norm = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const matches = (labelName, key) => {
+    const nl = norm(labelName); const nk = norm(key);
+    if (!nl || !nk) return false;
+    if (nl === nk) return true;
+    if (nl.split(' ').includes(nk)) return true;      // chave como palavra inteira
+    return nk.length >= 5 && nl.includes(nk);          // frases longas: "contém"
+  };
+  const counts = keyLabels.map((k) => ({ key: k, count: 0 }));
+  for (const c of cards) {
+    if (!c || !c.dueComplete) continue;
+    const compMs = c.dateLastActivity != null ? new Date(c.dateLastActivity).getTime() : NaN;
+    if (!Number.isFinite(compMs) || monthKey(compMs) !== curMonth) continue;
+    const labels = Array.isArray(c.labels) ? c.labels : [];
+    for (let i = 0; i < keyLabels.length; i++) {
+      if (labels.some((ln) => matches(ln, keyLabels[i]))) counts[i].count += 1;
+    }
+  }
+  return counts;
 }
 
 /**
