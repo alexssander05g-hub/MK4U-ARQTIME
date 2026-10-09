@@ -14,7 +14,7 @@
 
 import { getConfig, saveConfig, saveCardStateById } from '../services/storage.js';
 import { normalize, Status } from '../services/tracker.js';
-import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor, daysSummary } from '../services/report.js';
+import { buildReport, timeByMember, creationMsFromId, concludedByMember, bonusFor, daysSummary, daysSummaryMonth } from '../services/report.js';
 import { toCsv } from '../services/exporter.js';
 import { formatDuration, formatDateTime, now } from '../utils/time.js';
 import { el, clear } from '../utils/dom.js';
@@ -111,6 +111,19 @@ function getDaysSummary() {
   );
   _cacheDaysKey = key;
   return _cacheDays;
+}
+
+let _cacheDMKey = null;
+let _cacheDM = null;
+function getDaysSummaryMonth() {
+  const key = filterKey();
+  if (_cacheDM && _cacheDMKey === key) return _cacheDM;
+  _cacheDM = daysSummaryMonth(
+    filteredCards().map((c) => ({ createdAt: c.createdAt, dueComplete: c.dueComplete, dateLastActivity: c.dateLastActivity })),
+    MODEL.at, MODEL.config,
+  );
+  _cacheDMKey = key;
+  return _cacheDM;
 }
 
 // -- ordenação (aba Geral) -------------------------------------------------
@@ -519,9 +532,15 @@ function buildHtmlReport(sections) {
   if (sections.graficos) body.push(`<h2>Gráficos — tempo</h2><div class="charts">${barCharts}</div>`);
   if (sections.linha) body.push(`<h2>Tendência de dias (média — concluídos)</h2><div class="charts">${lineCharts}</div>`);
   if (sections.geral) body.push(`<h2>Geral (por card)</h2>${tableHtml(gHead, gRows, gFoot)}`);
-  if (sections.resumoDias) body.push('<h2>Resumo de dias — projetos concluídos</h2>'
-    + `<h3>Por semana</h3>${daysSectionHtml(dsum, 'semanal')}`
-    + `<h3>Por mês</h3>${daysSectionHtml(dsum, 'mensal')}`);
+  if (sections.resumoDias) {
+    const dsm = getDaysSummaryMonth();
+    const weekBlocks = dsm.weeks.length
+      ? dsm.weeks.map((w) => daysBlockHtml(w.label, w.dist, w.total, false)).join('')
+      : '<p class="muted">Nenhum projeto concluído neste mês ainda.</p>';
+    body.push(`<h2>Resumo de dias — ${esc(dsm.month.label)}</h2>`
+      + `<h3>Por semana (mês atual)</h3><div class="daysgrid">${weekBlocks}</div>`
+      + `<h3>Total do mês</h3><div class="daysgrid">${daysBlockHtml('Total — ' + dsm.month.label, dsm.month.dist, dsm.month.total, true)}</div>`);
+  }
   if (sections.semanal) body.push(`<h2>Semanal</h2>${periodTables(r.weekly, 'semanal')}`);
   if (sections.mensal) body.push(`<h2>Mensal</h2>${periodTables(r.monthly, 'mensal')}`);
   if (sections.sessoes) body.push(`<h2>Por sessão</h2>${tableHtml(sHead, sRows)}`);
