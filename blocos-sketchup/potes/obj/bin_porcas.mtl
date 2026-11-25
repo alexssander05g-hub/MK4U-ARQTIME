@@ -1,0 +1,98 @@
+newmtl plastico_bin
+Kd 0.1490 0.1490 0.1569
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl zinco_amarelo
+Kd 0.8392 0.6667 0.2353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl aco_escuro
+Kd 0.3608 0.3686 0.3843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl zinco
+Kd 0.6667 0.6745 0.6902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl nylon
+Kd 0.7843 0.7686 0.7059
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl papel_blister
+Kd 0.9255 0.8941 0.7843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pet_transparente
+Kd 0.8627 0.9216 0.9608
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 0.35
+
+newmtl massa_monte_parafusos
+Kd 0.4588 0.3647 0.1294
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl massa_monte_pregos
+Kd 0.1961 0.2000 0.2078
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl massa_monte_pacotes_de_pregos
+Kd 0.5059 0.4902 0.4314
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl massa_monte_arruelas
+Kd 0.3647 0.3686 0.3765
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl massa_monte_porcas
+Kd 0.3647 0.3686 0.3765
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl massa_monte_buchas
+Kd 0.4314 0.4196 0.3882
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl massa_monte_ferragens_mistas
+Kd 0.3647 0.3686 0.3765
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
