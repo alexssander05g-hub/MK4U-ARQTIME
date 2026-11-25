@@ -1,0 +1,56 @@
+newmtl fita_isolante_preto
+Kd 0.1098 0.1098 0.1176
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl papelao
+Kd 0.6902 0.5529 0.3608
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl ptfe_branco
+Kd 0.9490 0.9490 0.9412
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl plastico_azul
+Kd 0.4706 0.6275 0.7843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 0.85
+
+newmtl aco_escuro
+Kd 0.3608 0.3686 0.3843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl zinco_amarelo
+Kd 0.8392 0.6667 0.2353
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl nylon
+Kd 0.7843 0.7686 0.7059
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl zinco
+Kd 0.6667 0.6745 0.6902
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
