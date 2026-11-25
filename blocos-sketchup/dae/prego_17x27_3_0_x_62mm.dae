@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
-<asset><contributor><authoring_tool>gerar_blocos.py</authoring_tool></contributor><created>2026-11-25T17:12:54Z</created><modified>2026-11-25T17:12:54Z</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>
+<asset><contributor><authoring_tool>gerar_blocos.py</authoring_tool></contributor><created>2026-11-25T17:48:14Z</created><modified>2026-11-25T17:48:14Z</modified><unit name="millimeter" meter="0.001"/><up_axis>Z_UP</up_axis></asset>
 <library_effects>
 <effect id="mat_aco_escuro_fx"><profile_COMMON><technique sid="common"><lambert><diffuse><color>0.3608 0.3686 0.3843 1</color></diffuse><transparent opaque="A_ONE"><color>1 1 1 1.0</color></transparent><transparency><float>1</float></transparency></lambert></technique></profile_COMMON></effect>
 </library_effects><library_materials>

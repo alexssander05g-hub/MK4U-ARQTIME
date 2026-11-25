@@ -1,0 +1,21 @@
+newmtl plastico_verde
+Kd 0.2353 0.5882 0.3529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cerdas_brancas
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cerdas_azuis
+Kd 0.1176 0.3529 0.7059
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+

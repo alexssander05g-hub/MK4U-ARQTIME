@@ -1,0 +1,217 @@
+newmtl cartucho_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cartucho_vermelho
+Kd 0.8039 0.1373 0.1765
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl plastico_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl tubo_azul_claro
+Kd 0.5882 0.7843 0.9216
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl plastico_verde
+Kd 0.2353 0.5882 0.3529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cerdas_brancas
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cerdas_azuis
+Kd 0.1176 0.3529 0.7059
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cartela_escova
+Kd 0.5882 0.7843 0.9216
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pet_transparente
+Kd 0.8824 0.9216 0.9608
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 0.3
+
+newmtl sabonete_creme
+Kd 0.9412 0.8941 0.7843
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cartucho_verde
+Kd 0.2745 0.6667 0.6275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl frasco_verde_agua
+Kd 0.2745 0.6667 0.6275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl tampa_branca
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl frasco_rosa
+Kd 0.8824 0.4706 0.6275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl lata_prata
+Kd 0.7843 0.7922 0.8078
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl tampa_azul
+Kd 0.1176 0.3529 0.7059
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl tampa_roxa
+Kd 0.4706 0.3137 0.6667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pacote_rosa
+Kd 0.8824 0.4706 0.6275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pacote_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cartucho_bege
+Kd 0.8392 0.6980 0.5490
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl curativo_bege
+Kd 0.8392 0.6980 0.5490
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl gaze_branca
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pacote_algodao
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl faixa_azul
+Kd 0.1176 0.3529 0.7059
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl gel_transparente
+Kd 0.7451 0.8824 0.9608
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 0.65
+
+newmtl papel_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl papelao
+Kd 0.6902 0.5529 0.3608
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl rotulo_verde
+Kd 0.2745 0.6667 0.6275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl caixa_lencos_azul
+Kd 0.5882 0.7843 0.9216
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl abertura_escura
+Kd 0.2353 0.2353 0.2510
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pacote_lencos
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+

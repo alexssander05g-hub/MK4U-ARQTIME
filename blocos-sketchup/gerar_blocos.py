@@ -510,7 +510,7 @@ def write_stl(path, item):
     trimesh.util.concatenate(ms).export(path)
 
 
-def write_ruby(path, items, layout):
+def write_ruby(path, items, layout, module_name="MK4U_Blocos"):
     L = []
     L.append("# encoding: UTF-8")
     L.append("# Blocos de ferragens para SketchUp (gerado por gerar_blocos.py)")
@@ -518,7 +518,7 @@ def write_ruby(path, items, layout):
     L.append('#   load "C:/caminho/para/blocos_ferragens.rb"')
     L.append("# Cria um componente por item, com materiais, em milímetros reais.")
     L.append("require 'sketchup.rb'")
-    L.append("module MK4U_Blocos")
+    L.append(f"module {module_name}")
     L.append("  SMOOTH = Geom::PolygonMesh::AUTO_SOFTEN | Geom::PolygonMesh::SMOOTH_SOFT_EDGES")
     L.append("  ITEMS = [")
     for ii, it in enumerate(items):
@@ -567,8 +567,7 @@ def write_ruby(path, items, layout):
     puts "Blocos criados: #{ITEMS.map { |i| i[:name] }.join(', ')}"
   end
 end
-MK4U_Blocos.run
-""")
+""" + module_name + ".run\n")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(L))
 

@@ -1,0 +1,14 @@
+newmtl papel_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl papelao
+Kd 0.6902 0.5529 0.3608
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+

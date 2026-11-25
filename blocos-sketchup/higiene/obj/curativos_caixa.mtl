@@ -1,0 +1,14 @@
+newmtl cartucho_bege
+Kd 0.8392 0.6980 0.5490
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl cartucho_vermelho
+Kd 0.8039 0.1373 0.1765
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+

@@ -1,0 +1,14 @@
+newmtl plastico_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl tampa_roxa
+Kd 0.4706 0.3137 0.6667
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+

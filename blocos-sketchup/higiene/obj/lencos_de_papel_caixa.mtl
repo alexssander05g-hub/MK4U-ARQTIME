@@ -1,0 +1,21 @@
+newmtl caixa_lencos_azul
+Kd 0.5882 0.7843 0.9216
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl abertura_escura
+Kd 0.2353 0.2353 0.2510
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl papel_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+

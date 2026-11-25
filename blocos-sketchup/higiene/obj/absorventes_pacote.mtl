@@ -1,0 +1,14 @@
+newmtl pacote_rosa
+Kd 0.8824 0.4706 0.6275
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
+newmtl pacote_branco
+Kd 0.9608 0.9608 0.9529
+Ka 0 0 0
+Ks 0.1 0.1 0.1
+Ns 20
+d 1.0
+
